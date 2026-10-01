@@ -12,6 +12,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Repair migration script
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('tools/apply_v9.py')
+          s=p.read_text()
+          s=s.replace("drawPenaltyCinematic(s);}\"\nif anchor", "drawPenaltyCinematic(s);}\"\"\"\nif anchor")
+          p.write_text(s)
+          PY
       - name: Apply v9 gameplay patch
         run: python tools/apply_v9.py
       - name: Validate JavaScript
