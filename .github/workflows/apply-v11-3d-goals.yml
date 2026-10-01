@@ -1,0 +1,78 @@
+name: Apply v11 angled pitch and 3D goal fix
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-v11-3d-goals.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch pitch renderer
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('js/render/pitchRenderer.js')
+          s=p.read_text()
+
+          old="""  function drawPenalty(s,side){const ctx=s.ctx,sy=side==='top'?F.penaltySpot:F.length-F.penaltySpot,c=cameraWorldToCanvas(s,F.width/2,sy),scale=c.scale;ctx.beginPath();ctx.arc(c.x,c.y,Math.max(2,scale*.16),0,Math.PI*2);ctx.fill();ctx.save();const boundary=side==='top'?F.penaltyAreaDepth:F.length-F.penaltyAreaDepth,b=cameraWorldToCanvas(s,0,boundary).y;ctx.beginPath();if(side==='top')ctx.rect(-10000,b,s.canvas.width+20000,s.canvas.height+10000);else ctx.rect(-10000,-10000,s.canvas.width+20000,b+10000);ctx.clip();ctx.beginPath();ctx.arc(c.x,c.y,F.penaltyArcRadius*scale,0,Math.PI*2);ctx.stroke();ctx.restore();}"""
+          new="""  function drawPenalty(s,side){
+    const ctx=s.ctx,sy=side==='top'?F.penaltySpot:F.length-F.penaltySpot,c=cameraWorldToCanvas(s,F.width/2,sy),scale=c.scale;
+    ctx.beginPath();ctx.arc(c.x,c.y,Math.max(2,scale*.16),0,Math.PI*2);ctx.fill();
+    // Desenha somente o trecho do arco que fica FORA da grande área.
+    // O clipping anterior usava o eixo Y da tela; no campo horizontal isso gerava um círculo inteiro dentro da área.
+    const boundary=side==='top'?F.penaltyAreaDepth:F.length-F.penaltyAreaDepth;
+    let drawing=false;ctx.beginPath();
+    for(let i=0;i<=96;i++){
+      const a=i/96*Math.PI*2,wx=F.width/2+Math.cos(a)*F.penaltyArcRadius,wy=sy+Math.sin(a)*F.penaltyArcRadius;
+      const visible=side==='top'?wy>=boundary:wy<=boundary;
+      if(!visible){drawing=false;continue;}
+      const q=cameraWorldToCanvas(s,wx,wy);
+      if(!drawing){ctx.moveTo(q.x,q.y);drawing=true;}else ctx.lineTo(q.x,q.y);
+    }
+    ctx.stroke();
+  }"""
+          if old not in s: raise SystemExit('drawPenalty marker missing')
+          s=s.replace(old,new,1)
+
+          old2="""    ctx.strokeStyle='rgba(255,255,255,.72)';ctx.lineWidth=Math.max(1.5,p1.scale*.12);ctx.beginPath();ctx.moveTo(b1.x,b1.y);ctx.lineTo(b2.x,b2.y);ctx.stroke();
+    ctx.restore();
+  }"""
+          new2="""    ctx.strokeStyle='rgba(255,255,255,.72)';ctx.lineWidth=Math.max(1.5,p1.scale*.12);ctx.beginPath();ctx.moveTo(b1.x,b1.y);ctx.lineTo(b2.x,b2.y);ctx.stroke();
+
+    // Estrutura em altura: postes + travessão + teto da rede.
+    // A projeção de Z usa a mesma escala visual da bola, então dá para perceber chute alto/por cima.
+    const postH=Math.max(12,2.44*p1.scale*.90),lean=side==='top'?-postH*.12:postH*.12;
+    const up1={x:p1.x+lean,y:p1.y-postH},up2={x:p2.x+lean,y:p2.y-postH};
+    const ub1={x:b1.x+lean*.72,y:b1.y-postH*.86},ub2={x:b2.x+lean*.72,y:b2.y-postH*.86};
+    ctx.strokeStyle='#FFFFFF';ctx.lineWidth=Math.max(3,p1.scale*.24);ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(up1.x,up1.y);ctx.moveTo(p2.x,p2.y);ctx.lineTo(up2.x,up2.y);ctx.moveTo(up1.x,up1.y);ctx.lineTo(up2.x,up2.y);ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,.48)';ctx.lineWidth=Math.max(1,p1.scale*.08);
+    ctx.beginPath();ctx.moveTo(up1.x,up1.y);ctx.lineTo(ub1.x,ub1.y);ctx.lineTo(ub2.x,ub2.y);ctx.lineTo(up2.x,up2.y);ctx.stroke();
+    for(let i=1;i<5;i++){const t=i/5;ctx.beginPath();ctx.moveTo(up1.x+(up2.x-up1.x)*t,up1.y+(up2.y-up1.y)*t);ctx.lineTo(ub1.x+(ub2.x-ub1.x)*t,ub1.y+(ub2.y-ub1.y)*t);ctx.stroke();}
+    ctx.restore();
+  }"""
+          if old2 not in s: raise SystemExit('goal marker missing')
+          s=s.replace(old2,new2,1)
+
+          old3="""const b=s.ball,c=cameraWorldToCanvas(s,b.x,b.y),r=Math.max(4,Math.min(8,0.54*c.scale)),heightPx=Math.min(r*4,(b.z||0)*c.scale*.42),ctx=s.ctx;"""
+          new3="""const b=s.ball,c=cameraWorldToCanvas(s,b.x,b.y),r=Math.max(4,Math.min(8,0.54*c.scale)),heightPx=Math.min(r*9,(b.z||0)*c.scale*.90),ctx=s.ctx;"""
+          if old3 not in s: raise SystemExit('ball height marker missing')
+          s=s.replace(old3,new3,1)
+
+          p.write_text(s)
+          PY
+      - name: Validate JavaScript
+        run: node --check js/render/pitchRenderer.js
+      - name: Commit production patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add js/render/pitchRenderer.js
+          git commit -m 'feat: v11 3D goal height and correct penalty arcs'
+          git push
