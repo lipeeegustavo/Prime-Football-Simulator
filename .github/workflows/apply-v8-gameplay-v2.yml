@@ -1,0 +1,25 @@
+name: Apply v8 Gameplay Production
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-v8-gameplay-v2.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run gameplay patch
+        run: python tools/apply_v8.py
+      - name: Validate JavaScript
+        run: find js -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Commit production changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add js
+          git commit -m "feat: v8 3D goals, persistent cards, flexible substitutions and anti-teleport ball flow" || exit 0
+          git push
