@@ -1,0 +1,98 @@
+name: apply-v16-cancel-spacing
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-v16-cancel-spacing.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Patch UI and movement spacing
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p=Path('js/ui/screens.js')
+          s=p.read_text()
+          old='<button id="subBtn" class="btn btn-ghost">🔁 Substituição</button><button id="restartBtn" class="btn btn-ghost">↻ Reiniciar</button>'
+          new='<button id="subBtn" class="btn btn-ghost">🔁 Substituição</button><button id="restartBtn" class="btn btn-ghost">↻ Reiniciar</button><button id="cancelMatchBtn" class="btn btn-danger">✕ Cancelar partida</button>'
+          if old not in s: raise SystemExit('match controls snippet not found')
+          s=s.replace(old,new,1)
+          old2="    $('#restartBtn').onclick=async()=>{if(await confirmAction('Reiniciar a partida?','A partida atual será descartada e a mesma seed será usada novamente.'))restartMatch();};\n"
+          new2=old2+"    $('#cancelMatchBtn').onclick=async()=>{if(await confirmAction('Cancelar a partida?','O jogo atual será encerrado. Sua escalação será mantida e você voltará ao pré-jogo.')){Prime.MatchEngine.stop();Prime.Pitch.cancelAction&&Prime.Pitch.cancelAction();state.match=null;store.transition(S.PRE_GAME);}};\n"
+          if old2 not in s: raise SystemExit('restart handler snippet not found')
+          s=s.replace(old2,new2,1)
+          p.write_text(s)
+
+          p=Path('js/world/movementAI.js')
+          s=p.read_text()
+          marker='  function update(scene, state, dt) {\n'
+          if marker not in s: raise SystemExit('movement update marker not found')
+          helper=r'''  function separateTeamTargets(scene,state){
+    const poss=state.match?.poss||'A';
+    for(const key of ['A','B']){
+      const list=scene.players.filter(p=>p.key===key&&!p.isKeeper);
+      const isBuilding=key===poss&&['KICKOFF','BUILDUP','TRANSITION'].includes(state.match?.attackPhase||'');
+      const minDist=isBuilding?4.6:3.4;
+      for(let pass=0;pass<2;pass++){
+        for(let i=0;i<list.length;i++)for(let j=i+1;j<list.length;j++){
+          const a=list[i],b=list[j];
+          let dx=b.tx-a.tx,dy=b.ty-a.ty,d=Math.hypot(dx,dy);
+          if(d>=minDist)continue;
+          if(d<0.001){
+            const sign=((Number(a.id)||0)+(Number(b.id)||0))%2?1:-1;
+            dx=sign;dy=.35;d=Math.hypot(dx,dy);
+          }
+          const push=(minDist-d)/2;
+          const ux=dx/d,uy=dy/d;
+          a.tx=clamp(a.tx-ux*push,1.5,F.width-1.5);
+          a.ty=clamp(a.ty-uy*push*.72,1.5,F.length-1.5);
+          b.tx=clamp(b.tx+ux*push,1.5,F.width-1.5);
+          b.ty=clamp(b.ty+uy*push*.72,1.5,F.length-1.5);
+        }
+      }
+    }
+  }
+
+'''
+          s=s.replace(marker,helper+marker,1)
+          old3='    computeTargets(scene, state, dt);\n    for (const pl of scene.players) steering(pl, dt);'
+          new3='    computeTargets(scene, state, dt);\n    separateTeamTargets(scene,state);\n    for (const pl of scene.players) steering(pl, dt);'
+          if old3 not in s: raise SystemExit('movement call snippet not found')
+          s=s.replace(old3,new3,1)
+          p.write_text(s)
+
+          p=Path('css/responsive-v15.css')
+          s=p.read_text()
+          s += r'''
+
+/* v16: destructive match action stays visible and responsive. */
+#cancelMatchBtn{border-color:rgba(255,90,95,.48)!important;color:#FFD5D7!important;background:rgba(255,90,95,.10)!important}
+@media (min-width:701px){
+  body:has(.match-page) .match-controls{align-items:center!important}
+  body:has(.match-page) #cancelMatchBtn{margin-left:auto!important}
+}
+@media (max-width:700px){
+  body:has(.match-page) .match-controls{grid-template-columns:1fr 1fr!important}
+  body:has(.match-page) #cancelMatchBtn{grid-column:1/-1!important;order:5!important;min-height:38px!important}
+}
+'''
+          p.write_text(s)
+          PY
+      - name: Syntax check
+        run: |
+          node --check js/ui/screens.js
+          node --check js/world/movementAI.js
+      - name: Commit changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add js/ui/screens.js js/world/movementAI.js css/responsive-v15.css
+          git commit -m 'feat: cancel match and improve teammate spacing'
+          git push
