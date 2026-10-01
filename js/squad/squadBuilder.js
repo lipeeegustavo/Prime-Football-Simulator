@@ -133,7 +133,7 @@
     return t.bench.map((id,benchIndex)=>({id,benchIndex,player:playerById(id)})).filter(item=>{
       const p=item.player;if(!p||alreadyOut.has(String(item.id)))return false;
       if(required==='GOL')return p.group==='GOL'&&eligibleForPosition(p,'GOL');
-      return p.group!=='GOL'&&eligibleForPosition(p,required);
+      return p.group!=='GOL';
     });
   }
 
@@ -149,7 +149,7 @@
   function swapPlayers(teamKey,outIndex,benchIndex){
     const t=state.teams[teamKey], required=FORMATIONS[t.formation][outIndex], incoming=playerById(t.bench[benchIndex]);
     const validIncoming=validBenchForPosition(teamKey,outIndex).some(item=>item.benchIndex===benchIndex);
-    if(!incoming||!validIncoming)return {ok:false,error:`${incoming?incoming.name:'Reserva'} não pode jogar como ${required}.`};
+    if(!incoming||!validIncoming)return {ok:false,error:required==='GOL'?'O goleiro só pode ser substituído por outro goleiro.':'Escolha um jogador de linha para esta substituição.'};
     const outgoing=t.starters[outIndex];
     t.starters[outIndex]=t.bench[benchIndex];
     t.bench[benchIndex]=outgoing;

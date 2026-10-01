@@ -73,7 +73,6 @@
     const m=state.match;
     if(!m||m.finished){onDone&&onDone({skipped:true});return;}
     if(shouldCompressVisual(m,evt)){
-      if(evt.type==='PASS'&&evt.toId)Prime.Pitch.setCarrier(evt.team,evt.toId);
       onDone&&onDone({compressed:true});
       return;
     }
@@ -133,6 +132,11 @@
     m.stats.possession[m.poss]=(m.stats.possession[m.poss]||0)+dt;
   }
 
+  function visualRestart(key,id,kind){
+    if(!id)return;
+    if(Prime.Pitch?.restartToCarrier)Prime.Pitch.restartToCarrier(key,id,kind);
+    else Prime.Pitch.setCarrier(key,id);
+  }
   function livePlayer(key,id){
     const scene=Prime.Pitch&&Prime.Pitch.getScene?Prime.Pitch.getScene():null;
     return scene?.players?.find(p=>p.key===key&&String(p.id)===String(id))||null;
@@ -237,12 +241,12 @@
     if(r()<(evCfg.throwInChance||0.115)){
       const restartTeam=r()<.72?atk:def;
       m.stats.throwIns[restartTeam]++;m.stoppageWindow=true;logEvent(state,{type:'THROW_IN',team:restartTeam,minute});
-      queueVisual(state,{type:'THROW_IN',team:restartTeam,minute},()=>{if(state.match!==m||m.finished)return;m.poss=restartTeam;const c=chooseCarrier(state,restartTeam,r);m.carrierId=c?.id||null;m.possessionActions=0;if(c)Prime.Pitch.setCarrier(restartTeam,c.id);autoCoachSubs(state,minute,true);});
+      queueVisual(state,{type:'THROW_IN',team:restartTeam,minute},()=>{if(state.match!==m||m.finished)return;m.poss=restartTeam;const c=chooseCarrier(state,restartTeam,r);m.carrierId=c?.id||null;m.possessionActions=0;if(c)visualRestart(restartTeam,c.id,'throw-in');autoCoachSubs(state,minute,true);});
       return;
     }
     if(phase==='FINAL_THIRD'&&r()<(evCfg.cornerChanceFinalThird||0.055)){
       m.stats.corners[atk]++;m.stoppageWindow=true;logEvent(state,{type:'CORNER',team:atk,minute});
-      queueVisual(state,{type:'CORNER',team:atk,minute},()=>{if(state.match!==m||m.finished)return;const c=chooseCarrier(state,atk,r);m.poss=atk;m.carrierId=c?.id||null;m.possessionActions=Math.max(2,m.possessionActions);if(c)Prime.Pitch.setCarrier(atk,c.id);autoCoachSubs(state,minute,true);});
+      queueVisual(state,{type:'CORNER',team:atk,minute},()=>{if(state.match!==m||m.finished)return;const c=chooseCarrier(state,atk,r);m.poss=atk;m.carrierId=c?.id||null;m.possessionActions=Math.max(2,m.possessionActions);if(c)visualRestart(atk,c.id,'corner');autoCoachSubs(state,minute,true);});
       return;
     }
 
@@ -275,7 +279,7 @@
     shootBias=Math.min(.38,shootBias*(evCfg.shotBoost||1.75));
 
     if(r()<shootBias){
-      const shooter=(phase==='FINAL_THIRD'?carrier:(chooseShooter(state,atk,r)||carrier));
+      const shooter=carrier; // only the actual ball carrier shoots; avoids cross-field visual teleport
       const outcome=decideOutcome(state,atk,shooter,r);
       const evt={type:'SHOT',team:atk,playerId:shooter.id,outcome,minute};
       m.stats.shots[atk]++;
@@ -286,9 +290,9 @@
         if(outcome==='GOAL'&&(res.goalCrossed||res.forcedGoal)){
           m.score[atk]++;
           logEvent(state,{type:'GOAL',team:atk,playerId:shooter.id,minute:Math.min(90,Math.floor(m.gameSeconds/60))});
-          m.poss=def;m.carrierId=keeper(state,def)?.id;m.possessionActions=0;m.attackPhase='KICKOFF';
+          m.poss=def;const restartPlayer=chooseCarrier(state,def,r);m.carrierId=restartPlayer?.id||null;m.possessionActions=0;m.attackPhase='KICKOFF';
           Prime.Pitch.celebrate&&Prime.Pitch.celebrate(atk,shooter.id);
-          Prime.Pitch.setCarrier(def,m.carrierId);m.stoppageWindow=true;autoCoachSubs(state,m.minute,true);
+          visualRestart(def,m.carrierId,'kickoff');m.stoppageWindow=true;autoCoachSubs(state,m.minute,true);
         }else if(outcome==='SAVE'){
           logEvent(state,{type:'SAVE',team:def,keeperId:keeper(state,def)?.id,minute:Math.min(90,Math.floor(m.gameSeconds/60))});m.stats.saves[def]++;
           m.poss=def;m.carrierId=keeper(state,def)?.id;m.possessionActions=0;m.attackPhase='TRANSITION';
@@ -297,10 +301,10 @@
           const nowMinute=Math.min(90,Math.floor(m.gameSeconds/60));
           if(r()<.28){
             m.stats.corners[atk]++;logEvent(state,{type:'CORNER',team:atk,minute:nowMinute});
-            m.poss=atk;const c=chooseCarrier(state,atk,r);m.carrierId=c?.id||null;m.possessionActions=Math.max(2,m.possessionActions);m.attackPhase='FINAL_THIRD';if(c)Prime.Pitch.setCarrier(atk,c.id);
+            m.poss=atk;const c=chooseCarrier(state,atk,r);m.carrierId=c?.id||null;m.possessionActions=Math.max(2,m.possessionActions);m.attackPhase='FINAL_THIRD';if(c)visualRestart(atk,c.id,'corner');
           }else{
             logEvent(state,{type:'GOAL_KICK',team:def,minute:nowMinute});
-            m.poss=def;m.carrierId=keeper(state,def)?.id;m.possessionActions=0;m.attackPhase='BUILDUP';Prime.Pitch.setCarrier(def,m.carrierId);
+            m.poss=def;m.carrierId=keeper(state,def)?.id;m.possessionActions=0;m.attackPhase='BUILDUP';visualRestart(def,m.carrierId,'goal-kick');
           }
           m.stoppageWindow=true;autoCoachSubs(state,m.minute,true);
         }
@@ -427,7 +431,7 @@
   function startSecondHalf(state){
     const m=state.match;if(!m||!m.waitingHalfTime)return {ok:false,error:'A partida não está no intervalo.'};
     flushVisuals(state);m.waitingHalfTime=false;m.secondHalf=true;m.paused=false;m.stoppageWindow=false;m.attackPhase='KICKOFF';
-    refreshPitch(state);const key='B',carrier=chooseCarrier(state,key,m.rng);m.poss=key;m.carrierId=carrier?.id||null;if(m.carrierId)Prime.Pitch.setCarrier(key,m.carrierId);
+    refreshPitch(state);const key='B',carrier=chooseCarrier(state,key,m.rng);m.poss=key;m.carrierId=carrier?.id||null;if(m.carrierId)visualRestart(key,m.carrierId,'kickoff');
     emit(state,"46' — começa o segundo tempo. Os times trocaram de lado.",'event','SECOND_HALF');Prime.GameLoop.setPaused(false);update(state);return {ok:true};
   }
 
@@ -485,6 +489,7 @@
     const m=state.match;if(!m||m.finished)return {ok:false,error:'A partida não está ativa.'};
     if(m.subs[key]>=5)return {ok:false,error:'Limite de 5 substituições atingido.'};
     const outId=state.teams[key].starters[outIndex];
+    if((m.sentOff?.[key]||[]).includes(String(outId)))return {ok:false,error:'Jogador expulso não pode ser substituído.'};
     if((m.subbedOut?.[key]||[]).includes(String(state.teams[key].bench[benchIndex])))return {ok:false,error:'Esse jogador já saiu da partida e não pode retornar.'};
     const res=swapPlayers(key,outIndex,benchIndex);
     if(!res.ok)return res;

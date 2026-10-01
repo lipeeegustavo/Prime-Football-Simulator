@@ -261,7 +261,9 @@
     const allowed=state.mode==='cpu'?['A']:['A','B'];wrap.hidden=allowed.length===1;teamSel.innerHTML=allowed.map(k=>`<option value="${k}">${esc(state.teams[k].name)}</option>`).join('');teamSel.value=allowed[0];refreshSubOut();dialog.showModal();updateMatchHud();
   }
   function refreshSubOut(){
-    const key=$('#subTeam').value,t=state.teams[key],positions=FORMATIONS[t.formation];$('#subOut').innerHTML=t.starters.map((id,i)=>{const p=Squad.playerById(id);return `<option value="${i}">${esc(p?.name||'—')} (${positions[i]})</option>`;}).join('');refreshSubIn();
+    const key=$('#subTeam').value,t=state.teams[key],positions=FORMATIONS[t.formation],sent=new Set((state.match?.sentOff?.[key]||[]).map(String)),cards=state.match?.cards?.[key]||{};
+    $('#subOut').innerHTML=t.starters.map((id,i)=>{const p=Squad.playerById(id),red=sent.has(String(id)),yellow=Number(cards[String(id)]||0)>0;return `<option value="${i}" ${red?'disabled':''}>${red?'🟥 ':yellow?'🟨 ':''}${esc(p?.name||'—')} (${positions[i]})${red?' · expulso':''}</option>`;}).join('');
+    const first=Array.from($('#subOut').options).find(o=>!o.disabled);if(first)$('#subOut').value=first.value;refreshSubIn();
   }
   function refreshSubIn(){
     const key=$('#subTeam').value,outIndex=Number($('#subOut').value),valid=Squad.validBenchForPosition(key,outIndex);$('#subIn').innerHTML=valid.length?valid.map(x=>`<option value="${x.benchIndex}">${esc(x.player.name)} · ${x.player.positions.join('/')}</option>`).join(''):'<option value="">Nenhum reserva compatível</option>';$('#confirmSubBtn').disabled=!valid.length;
