@@ -8,6 +8,12 @@
     if(dt>.05)dt=.05;
     if(!paused&&handlers.update)handlers.update(dt*speed,dt);
     if(handlers.render)handlers.render(paused?0:dt*speed,dt);
+    // Durante a disputa de pênaltis o relógio da partida fica pausado,
+    // mas a animação visual precisa continuar em tempo real.
+    if(paused&&Prime.Pitch&&Prime.Pitch.getScene){
+      const scene=Prime.Pitch.getScene();
+      if(scene&&scene.action&&scene.action.type==='penalty')Prime.Pitch.frame(0,dt);
+    }
     raf=requestAnimationFrame(frame);
   }
 
