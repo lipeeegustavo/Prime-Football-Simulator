@@ -14,7 +14,8 @@
       lookAhead: 5.5
     }),
 
-    // Ritmo: eventos são menos aleatórios e mais encadeados em uma posse.
+    // Ritmo: faltas e finalizações continuam probabilísticas; saídas de campo agora
+    // dependem da bola realmente cruzar uma linha física do campo.
     event: Object.freeze({
       baseGapMin: 18,
       baseGapMax: 34,
@@ -22,9 +23,9 @@
       maxPossessionActions: 8,
       minPossessionActions: 2,
       foulChance: 0.075,
-      throwInChance: 0.115,
-      cornerChanceFinalThird: 0.055,
-      goalKickChance: 0.025,
+      throwInChance: 0,
+      cornerChanceFinalThird: 0,
+      goalKickChance: 0,
       shotBoost: 5.0,
       maxShootoutKicks: 30
     }),
