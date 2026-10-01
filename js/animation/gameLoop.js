@@ -8,11 +8,27 @@
     if(dt>.05)dt=.05;
     if(!paused&&handlers.update)handlers.update(dt*speed,dt);
     if(handlers.render)handlers.render(paused?0:dt*speed,dt);
-    // Durante a disputa de pênaltis o relógio da partida fica pausado,
-    // mas a animação visual precisa continuar em tempo real.
+
+    // O relógio fica pausado durante a disputa de pênaltis, mas a animação
+    // visual precisa continuar em tempo real. Mantemos também um watchdog:
+    // se uma cobrança ficar presa por qualquer motivo visual, o callback é
+    // liberado e a disputa segue para a próxima cobrança.
     if(paused&&Prime.Pitch&&Prime.Pitch.getScene){
       const scene=Prime.Pitch.getScene();
-      if(scene&&scene.action&&scene.action.type==='penalty')Prime.Pitch.frame(0,dt);
+      if(scene&&scene.action&&scene.action.type==='penalty'){
+        Prime.Pitch.frame(0,dt);
+        scene.__penaltyWatch=(scene.__penaltyWatch||0)+dt;
+        if(scene.__penaltyWatch>4.25&&scene.action&&scene.action.type==='penalty'){
+          const action=scene.action;
+          scene.action=null;
+          scene.__penaltyWatch=0;
+          if(typeof action.done==='function'){
+            action.done({scored:Boolean(action.scored),resultKind:action.resultKind||null,watchdog:true});
+          }
+        }
+      }else if(scene){
+        scene.__penaltyWatch=0;
+      }
     }
     raf=requestAnimationFrame(frame);
   }
