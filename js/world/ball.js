@@ -12,7 +12,9 @@
     bounceStopVz:1.15,
     curveStrength:.031,
     maxHeight:14,
-    controlSnapDistance:1.6
+    controlSnapDistance:1.6,
+    controlMaxSpeed:11.5,
+    controlMaxAccel:36
   });
 
   function createBall(x,y){
@@ -29,7 +31,8 @@
       returnDelay:0,
       spin:0,
       lastGroundImpact:0,
-      travelled:0
+      travelled:0,
+      rotation:0
     };
   }
 
@@ -97,9 +100,13 @@
   function controlledUpdate(ball,dt){
     const dx=(ball.targetX??ball.x)-ball.x;
     const dy=(ball.targetY??ball.y)-ball.y;
-    const ax=dx*CONFIG.controlSpring-ball.vx*CONFIG.controlDamping;
-    const ay=dy*CONFIG.controlSpring-ball.vy*CONFIG.controlDamping;
+    let ax=dx*CONFIG.controlSpring-ball.vx*CONFIG.controlDamping;
+    let ay=dy*CONFIG.controlSpring-ball.vy*CONFIG.controlDamping;
+    const accel=Math.hypot(ax,ay);
+    if(accel>CONFIG.controlMaxAccel){ax=ax/accel*CONFIG.controlMaxAccel;ay=ay/accel*CONFIG.controlMaxAccel;}
     ball.vx+=ax*dt;ball.vy+=ay*dt;
+    const speed=Math.hypot(ball.vx,ball.vy);
+    if(speed>CONFIG.controlMaxSpeed){ball.vx=ball.vx/speed*CONFIG.controlMaxSpeed;ball.vy=ball.vy/speed*CONFIG.controlMaxSpeed;}
     const d=Math.hypot(dx,dy);
     if(d<.08&&Math.hypot(ball.vx,ball.vy)<.18){ball.x=ball.targetX;ball.y=ball.targetY;ball.vx=0;ball.vy=0;}
     ball.z+=(0-ball.z)*Math.min(1,dt*14);
@@ -121,7 +128,12 @@
     const oldX=ball.x,oldY=ball.y;
     ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;
     ball.z+=ball.vz*dt;
-    ball.travelled+=Math.hypot(ball.x-oldX,ball.y-oldY);
+    const stepDistance=Math.hypot(ball.x-oldX,ball.y-oldY);
+    ball.travelled+=stepDistance;
+    if(stepDistance>0){
+      const roll=stepDistance/Math.max(.18,ball.radius||.36);
+      ball.rotation=(ball.rotation||0)+roll;
+    }
 
     if(ball.z<=0){
       if(ball.vz<0){
