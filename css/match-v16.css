@@ -1,0 +1,23 @@
+/* Prime Football Simulator — match actions v16 */
+#cancelMatchBtn{
+  border-color:rgba(255,90,95,.52)!important;
+  background:rgba(255,90,95,.10)!important;
+  color:#FFD5D7!important;
+}
+#cancelMatchBtn:hover{background:rgba(255,90,95,.16)!important}
+
+@media (min-width:701px){
+  body:has(.match-page) .match-controls{align-items:center!important}
+  body:has(.match-page) #cancelMatchBtn{margin-left:auto!important}
+}
+
+@media (max-width:700px){
+  body:has(.match-page) .match-controls{grid-template-columns:1fr 1fr!important}
+  body:has(.match-page) #cancelMatchBtn{
+    grid-column:1/-1!important;
+    order:5!important;
+    width:100%!important;
+    min-height:38px!important;
+    font-size:.70rem!important;
+  }
+}
