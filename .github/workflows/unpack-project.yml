@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - project.tar.xz.b64
+      - PUBLISH_PROJECT
 
 permissions:
   contents: write
@@ -16,13 +16,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Unpack project
+      - name: Reassemble and unpack project
         shell: bash
         run: |
           set -euo pipefail
+          cat .project-payload/part-* > project.tar.xz.b64
           base64 -d project.tar.xz.b64 > project.tar.xz
           tar -xJf project.tar.xz
-          rm -f project.tar.xz project.tar.xz.b64
+          rm -rf project.tar.xz project.tar.xz.b64 .project-payload PUBLISH_PROJECT
 
       - name: Commit project files
         shell: bash
