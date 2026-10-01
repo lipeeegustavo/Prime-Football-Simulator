@@ -1,0 +1,33 @@
+name: Apply Prime v20 follow-up
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-prime-v20b.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply v20b patch
+        run: node tools/apply-v20b.js
+      - name: Validate JavaScript
+        run: find js -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Commit fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add js/simulation/matchEngine.js js/online/liveMatchV20.js
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "fix: v20 second-half cadence and secure viewer id"
+          git push origin HEAD:main
