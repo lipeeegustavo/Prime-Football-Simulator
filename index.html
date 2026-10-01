@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0B1A12" />
+  <title>Prime Football Simulator</title>
+  <link rel="stylesheet" href="css/main.css" />
+</head>
+<body>
+  <header class="topbar" id="topbar">
+    <a class="brand" id="brandHome" href="#" aria-label="Prime Football Simulator — início">
+      <span class="brand-mark">P</span>
+      <span><strong>Prime Football</strong><small>Simulator</small></span>
+    </a>
+    <nav class="topbar-actions">
+      <span class="seed-chip" id="seedChip">Seed: PRIME-001</span>
+      <button id="homeBtn" class="btn btn-ghost btn-small" type="button">⌂ Menu</button>
+    </nav>
+  </header>
+
+  <div id="progressRoot" class="progress-shell" aria-label="Progresso do jogo"></div>
+  <main id="app" class="app-shell" aria-live="polite"></main>
+  <div id="toastRoot" class="toast-root" aria-live="assertive" aria-atomic="true"></div>
+
+  <dialog id="subDialog" class="game-dialog">
+    <form method="dialog" class="dialog-card" id="subForm">
+      <div class="dialog-heading">
+        <div><span class="eyebrow">Durante a partida</span><h3>🔁 Substituição</h3></div>
+        <button type="button" class="icon-btn" id="closeSubBtn" aria-label="Fechar">×</button>
+      </div>
+      <label id="subTeamWrap">Time<select id="subTeam"></select></label>
+      <label>Sai<select id="subOut"></select></label>
+      <label>Entra<select id="subIn"></select><small id="subHint">Mostramos somente reservas aptos para a posição.</small></label>
+      <div class="dialog-actions">
+        <button type="button" id="cancelSubBtn" class="btn btn-ghost">Cancelar</button>
+        <button id="confirmSubBtn" type="button" class="btn btn-primary">Confirmar troca</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="confirmDialog" class="game-dialog">
+    <form method="dialog" class="dialog-card compact">
+      <div class="dialog-heading"><div><span class="eyebrow">Confirmação</span><h3 id="confirmTitle">Tem certeza?</h3></div></div>
+      <p id="confirmText" class="muted"></p>
+      <div class="dialog-actions">
+        <button value="cancel" class="btn btn-ghost">Cancelar</button>
+        <button value="confirm" class="btn btn-danger">Confirmar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Scripts clássicos em ordem. Tudo funciona diretamente via file:// -->
+  <script src="js/state/gameStates.js"></script>
+  <script src="js/data/players.js"></script>
+  <script src="js/data/coaches.js"></script>
+  <script src="js/data/formations.js"></script>
+  <script src="js/config/balance.js"></script>
+  <script src="js/simulation/rng.js"></script>
+  <script src="js/world/fieldGeometry.js"></script>
+  <script src="js/world/ball.js"></script>
+  <script src="js/world/movementAI.js"></script>
+  <script src="js/animation/gameLoop.js"></script>
+  <script src="js/state/store.js"></script>
+  <script src="js/state/persistence.js"></script>
+  <script src="js/squad/squadBuilder.js"></script>
+  <script src="js/squad/validation.js"></script>
+  <script src="js/cpu/cpuManager.js"></script>
+  <script src="js/simulation/matchRules.js"></script>
+  <script src="js/render/pitchRenderer.js"></script>
+  <script src="js/simulation/matchEngine.js"></script>
+  <script src="js/ui/screens.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
