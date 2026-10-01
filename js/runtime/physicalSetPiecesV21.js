@@ -90,8 +90,20 @@
   function playEvent(evt,done){
     if(evt?.type==='OUT_TOUCHLINE')return ballOutTouchline(evt,done);
     if(evt?.type==='OUT_GOAL_LINE')return ballOutGoalLine(evt,done);
-    if(evt?.type==='THROW_IN')return throwIn(evt,done);
-    if(evt?.type==='CORNER')return corner(evt,done);
+    if(evt?.type==='THROW_IN'){
+      const s=scene();if(!s?.ball)return done&&done({setPiece:false});
+      const alreadyOut=s.ball.x<=0||s.ball.x>=F.width;
+      if(alreadyOut)return throwIn(evt,done);
+      const current=s.carrier||nearest((s.players||[]).filter(p=>!p.isKeeper),s.ball.x,s.ball.y);
+      return ballOutTouchline({team:evt.team,lastTouchTeam:current?.key||((evt.team==='A')?'B':'A'),playerId:current?.id},res=>throwIn(Object.assign({},evt,{side:res.side,outY:res.y}),done));
+    }
+    if(evt?.type==='CORNER'){
+      const s=scene();if(!s?.ball)return done&&done({setPiece:false});
+      const alreadyOut=s.ball.y<=0||s.ball.y>=F.length;
+      if(alreadyOut)return corner(evt,done);
+      const current=s.carrier||nearest((s.players||[]).filter(p=>!p.isKeeper),s.ball.x,s.ball.y);
+      return ballOutGoalLine({team:evt.team,playerId:current?.id},res=>corner(Object.assign({},evt,{side:res.side}),done));
+    }
     return originalPlayEvent?originalPlayEvent(evt,done):done&&done();
   }
   Prime.Pitch=Object.freeze(Object.assign({},base,{playEvent}));
