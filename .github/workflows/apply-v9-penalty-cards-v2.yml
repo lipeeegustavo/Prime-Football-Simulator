@@ -12,6 +12,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply patch
+      - name: Apply v9 gameplay patch
+        run: python tools/apply_v9.py
+      - name: Validate JavaScript
+        run: find js -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Commit v9 production
         run: |
-          echo 'CmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAppbXBvcnQgcmUKCiMgTUFUQ0ggRU5HSU5FCnA9UGF0aCgianMvc2ltdWxhdGlvbi9tYXRjaEVuZ2luZS5qcyIpCnM9cC5yZWFkX3RleHQoKQoKcmVwbHMgPSBbCigiY2FzZSdGT1VMJzp0ZXh0PWAke2V2dC5taW51dGV9JyDigJQgZmFsdGEgbWFyY2FkYSBwb3IgJHtwKGV2dC5wbGF5ZXJJZCl9LmA7YnJlYWs7IiwKICJjYXNlJ0ZPVUwnOnRleHQ9YCR7ZXZ0Lm1pbnV0ZX0nIOKAlCBmYWx0YSBkZSAke3AoZXZ0LnBsYXllcklkKX0ke2V2dC5yZWFzb24/YCBwb3IgJHtldnQucmVhc29ufWA6Jyd9LmA7YnJlYWs7IiksCigiY2FzZSdZRUxMT1dfQ0FSRCc6dGV4dD1gJHtldnQubWludXRlfScg4oCUIPCfj6ggYW1hcmVsbyBwYXJhICR7cChldnQucGxheWVySWQpfS5gO2JyZWFrOyIsCiAiY2FzZSdZRUxMT1dfQ0FSRCc6dGV4dD1gJHtldnQubWludXRlfScg4oCUIPCfj6ggYW1hcmVsbyBwYXJhICR7cChldnQucGxheWVySWQpfSR7ZXZ0LnJlYXNvbj9gIHBvciAke2V2dC5yZWFzb259YDonJ30uYDticmVhazsiKSwK KCJjYXNlJ1JFRF9DQVJEJzp0ZXh0PWAke2V2dC5taW51dGV9JyDigJQg8J+fpyAke3AoZXZ0LnBsYXllcklkKX0gZXhwdWxzby5gO2Nscz0nZGFuZ2VyJzticmVhazsiLAogImNhc2UnUkVEX0NBUkQnOnRleHQ9ZXZ0LnNlY29uZFllbGxvdz9gJHtldnQubWludXRlfScg4oCUIPCfp6cgJHtwKGV2dC5wbGF5ZXJJZCl9IGV4cHVsc286IHNlZ3VuZG8gYW1hcmVsbw=='}
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: v9 penalty cinematic, 3D goal and card reasons" || exit 0
+          git push
