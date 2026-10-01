@@ -1,0 +1,164 @@
+name: Upgrade v7 Broadcast + C++ Physics
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/upgrade-v7-broadcast-wasm.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  upgrade:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply v7 source changes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          root=Path('.')
+          p=root/'js/render/pitchRenderer.js'; s=p.read_text()
+          old="""  function cameraWorldToCanvas(s,x,y){
+            const c=s.camera,canvas=s.canvas;
+            if(c.mode==='full')return fullWorldToCanvas(s,x,y);
+            const margin=18*Math.min(2,window.devicePixelRatio||1),usableW=canvas.width-margin*2,usableH=canvas.height-margin*2;
+            const fullScale=Math.min(usableW/F.width,usableH/(F.length+F.goalDepth*2));
+            const scale=fullScale*c.zoom;
+            return {x:canvas.width/2+(x-c.x)*scale,y:canvas.height/2+(y-c.y)*scale,scale};
+          }
+          function fullWorldToCanvas(s,x,y){
+            const canvas=s.canvas,margin=18*Math.min(2,window.devicePixelRatio||1),totalLen=F.length+F.goalDepth*2;
+            const scale=Math.min((canvas.width-margin*2)/F.width,(canvas.height-margin*2)/totalLen);
+            const drawW=F.width*scale,drawH=totalLen*scale,ox=(canvas.width-drawW)/2,oy=(canvas.height-drawH)/2;
+            return {x:ox+x*scale,y:oy+(y+F.goalDepth)*scale,scale};
+          }
+          function updateCamera(s,dt){
+            const c=s.camera;if(c.mode==='full'){c.x=F.width/2;c.y=F.length/2;return;}
+            const focus=s.ball||s.carrier||{x:F.width/2,y:F.length/2};
+            const poss=s.state?.match?.poss||s.carrier?.key||'A';
+            const dir=visualAttacksTop(poss)?-1:1;
+            const look=B.camera?.lookAhead||5.5;
+            c.targetX=focus.x;
+            c.targetY=focus.y+dir*look;
+            const smooth=1-Math.exp(-(B.camera?.smoothing||4.6)*Math.max(0,dt));
+            c.x+=(c.targetX-c.x)*smooth;c.y+=(c.targetY-c.y)*smooth;
+            const aspect=s.canvas.width/s.canvas.height,baseViewW=F.width/(c.zoom||2),baseViewH=baseViewW/aspect;
+            c.x=Math.max(baseViewW*.46,Math.min(F.width-baseViewW*.46,c.x));
+            c.y=Math.max(baseViewH*.46-F.goalDepth,Math.min(F.length+F.goalDepth-baseViewH*.46,c.y));
+          }
+          """
+          new="""  // Broadcast horizontal: comprimento do campo no eixo X da tela.
+          function cameraWorldToCanvas(s,x,y){
+            const c=s.camera,canvas=s.canvas;
+            if(c.mode==='full')return fullWorldToCanvas(s,x,y);
+            const margin=18*Math.min(2,window.devicePixelRatio||1),usableW=canvas.width-margin*2,usableH=canvas.height-margin*2;
+            const fullScale=Math.min(usableW/(F.length+F.goalDepth*2),usableH/F.width);
+            const scale=fullScale*c.zoom;
+            return {x:canvas.width/2+(y-c.y)*scale,y:canvas.height/2+(x-c.x)*scale,scale};
+          }
+          function fullWorldToCanvas(s,x,y){
+            const canvas=s.canvas,margin=18*Math.min(2,window.devicePixelRatio||1),totalLen=F.length+F.goalDepth*2;
+            const scale=Math.min((canvas.width-margin*2)/totalLen,(canvas.height-margin*2)/F.width);
+            const drawW=totalLen*scale,drawH=F.width*scale,ox=(canvas.width-drawW)/2,oy=(canvas.height-drawH)/2;
+            return {x:ox+(y+F.goalDepth)*scale,y:oy+x*scale,scale};
+          }
+          function updateCamera(s,dt){
+            const c=s.camera;if(c.mode==='full'){c.x=F.width/2;c.y=F.length/2;return;}
+            const focus=s.ball||s.carrier||{x:F.width/2,y:F.length/2};
+            const poss=s.state?.match?.poss||s.carrier?.key||'A';
+            const dir=visualAttacksTop(poss)?-1:1,look=B.camera?.lookAhead||5.5;
+            c.targetX=focus.x;c.targetY=focus.y+dir*look;
+            const smooth=1-Math.exp(-(B.camera?.smoothing||4.6)*Math.max(0,dt));
+            c.x+=(c.targetX-c.x)*smooth;c.y+=(c.targetY-c.y)*smooth;
+            const margin=18*Math.min(2,window.devicePixelRatio||1),usableW=s.canvas.width-margin*2,usableH=s.canvas.height-margin*2;
+            const fullScale=Math.min(usableW/(F.length+F.goalDepth*2),usableH/F.width),scale=fullScale*(c.zoom||2.05);
+            const halfLateral=Math.min(F.width/2,usableH/(2*scale)),halfLength=Math.min((F.length+F.goalDepth*2)/2,usableW/(2*scale));
+            c.x=Math.max(halfLateral,Math.min(F.width-halfLateral,c.x));
+            c.y=Math.max(-F.goalDepth+halfLength,Math.min(F.length+F.goalDepth-halfLength,c.y));
+          }
+          """
+          if old not in s: raise SystemExit('renderer projection block not found')
+          s=s.replace(old,new)
+          old="""  function drawMiniMap(s){
+            if(s.preview)return;const ctx=s.ctx,w=Math.min(150,s.canvas.width*.2),h=w*1.54,x=s.canvas.width-w-12,y=s.canvas.height-h-12;ctx.save();ctx.fillStyle='rgba(5,20,10,.78)';roundRect(ctx,x,y,w,h,10);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.36)';ctx.stroke();const pad=8,fx=x+pad,fy=y+pad,fw=w-pad*2,fh=h-pad*2;ctx.strokeStyle='rgba(255,255,255,.7)';ctx.strokeRect(fx,fy,fw,fh);ctx.beginPath();ctx.moveTo(fx,fy+fh/2);ctx.lineTo(fx+fw,fy+fh/2);ctx.stroke();for(const pl of s.players){const px=fx+pl.x/F.width*fw,py=fy+pl.y/F.length*fh;ctx.fillStyle=pl.key==='A'?'#3B82F6':'#FF6B35';ctx.beginPath();ctx.arc(px,py,2.6,0,Math.PI*2);ctx.fill();}ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(fx+s.ball.x/F.width*fw,fy+s.ball.y/F.length*fh,2.4,0,Math.PI*2);ctx.fill();ctx.restore();
+          }
+          """
+          new="""  function drawMiniMap(s){
+            if(s.preview)return;const ctx=s.ctx,w=Math.min(190,s.canvas.width*.22),h=w*(F.width/F.length),x=(s.canvas.width-w)/2,y=s.canvas.height-h-12;
+            ctx.save();ctx.fillStyle='rgba(5,20,10,.82)';roundRect(ctx,x,y,w,h,10);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.36)';ctx.stroke();
+            const pad=8,fx=x+pad,fy=y+pad,fw=w-pad*2,fh=h-pad*2;ctx.strokeStyle='rgba(255,255,255,.7)';ctx.strokeRect(fx,fy,fw,fh);ctx.beginPath();ctx.moveTo(fx+fw/2,fy);ctx.lineTo(fx+fw/2,fy+fh);ctx.stroke();
+            for(const pl of s.players){const px=fx+pl.y/F.length*fw,py=fy+pl.x/F.width*fh;ctx.fillStyle=pl.key==='A'?'#3B82F6':'#FF6B35';ctx.beginPath();ctx.arc(px,py,2.8,0,Math.PI*2);ctx.fill();}
+            ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(fx+s.ball.y/F.length*fw,fy+s.ball.x/F.width*fh,2.5,0,Math.PI*2);ctx.fill();ctx.restore();
+          }
+          """
+          if old not in s: raise SystemExit('renderer minimap block not found')
+          p.write_text(s.replace(old,new))
+
+          p=root/'js/world/ball.js'; s=p.read_text()
+          needle="""  function update(ball,dt){
+            if(!ball||dt<=0)return;
+            dt=Math.min(.05,dt);
+            if(ball.returnDelay>0)ball.returnDelay=Math.max(0,ball.returnDelay-dt);
+
+            if(ball.state==='controlled'&&ball.targetX!=null&&ball.targetY!=null){
+          """
+          repl="""  function update(ball,dt){
+            if(!ball||dt<=0)return;
+            dt=Math.min(.05,dt);
+            if(ball.returnDelay>0)ball.returnDelay=Math.max(0,ball.returnDelay-dt);
+            if(Prime.PhysicsBridge&&Prime.PhysicsBridge.isReady&&Prime.PhysicsBridge.isReady()){
+              Prime.PhysicsBridge.step(ball,dt);return;
+            }
+
+            if(ball.state==='controlled'&&ball.targetX!=null&&ball.targetY!=null){
+          """
+          if needle not in s: raise SystemExit('ball update block not found')
+          p.write_text(s.replace(needle,repl))
+
+          p=root/'index.html'; s=p.read_text()
+          needle='  <script src="js/world/fieldGeometry.js"></script>\n  <script src="js/world/ball.js"></script>'
+          repl='  <script src="js/world/fieldGeometry.js"></script>\n  <script src="physics/ball_physics.js"></script>\n  <script src="js/world/physicsBridge.js"></script>\n  <script src="js/world/ball.js"></script>'
+          if needle not in s: raise SystemExit('index physics insertion point not found')
+          p.write_text(s.replace(needle,repl))
+
+          p=root/'css/main.css'; s=p.read_text(); s += '''\n\n/* v7 — broadcast horizontal match view */\n.match-page{max-width:1600px;margin:0 auto}\n.match-grid{display:block!important}\n.stadium-card{padding:5px;background:#07160D;border-radius:14px;box-shadow:0 18px 55px rgba(0,0,0,.28)}\n.pitch-stage{width:100%;aspect-ratio:16/9;min-height:0!important;max-height:none!important;background:#0b2112;border-radius:12px;overflow:hidden}\n.pitch-canvas{width:100%!important;height:100%!important;min-height:0!important;display:block;border-radius:12px}\n.scoreboard{max-width:100%;border-radius:12px;padding:8px 14px;background:linear-gradient(180deg,rgba(10,25,18,.98),rgba(10,25,18,.90));box-shadow:0 8px 28px rgba(0,0,0,.25)}\n.camera-controls{top:10px;right:10px}.match-controls{margin-top:7px}\n.narration-drawer{position:absolute;right:10px;top:52px;bottom:10px;width:min(360px,35vw);z-index:10;background:rgba(11,26,18,.94);backdrop-filter:blur(12px);transform:translateX(calc(100% + 18px));transition:.22s ease;pointer-events:none}\n.narration-drawer.open{transform:translateX(0);pointer-events:auto}\n@media(max-width:700px){.match-page{width:100%;overflow:hidden}.scoreboard{padding:7px 8px}.score-team-name{max-width:28vw}.pitch-stage{aspect-ratio:16/10;min-height:0!important}.pitch-canvas{height:100%!important;min-height:0!important}.camera-controls{gap:4px}.camera-btn{padding:6px 7px;font-size:.62rem}.narration-drawer{left:8px;right:8px;top:auto;bottom:8px;width:auto;height:min(50svh,400px);transform:translateY(calc(100% + 18px))}.narration-drawer.open{transform:translateY(0)}}\n'''
+          p.write_text(s)
+          PY
+          mkdir -p js/world physics
+          cat > js/world/physicsBridge.js <<'EOF'
+          (function(Prime){
+            let module=null,loading=false,failed=false;
+            function boot(){if(module||loading||failed)return;if(typeof window.createPrimePhysicsModule!=='function'){failed=true;return;}loading=true;window.createPrimePhysicsModule({locateFile:path=>'physics/'+path}).then(m=>{module=m;loading=false;console.info('[Prime] C++ physics/WASM ativo.');}).catch(err=>{loading=false;failed=true;console.warn('[Prime] WASM indisponível; fallback JS ativo.',err);});}
+            function isReady(){if(!module&&!loading&&!failed)boot();return Boolean(module);}
+            function step(ball,dt){if(!module)return false;const mode=ball.state==='controlled'?1:(ball.state==='dead'?0:2),tx=Number.isFinite(ball.targetX)?ball.targetX:ball.x,ty=Number.isFinite(ball.targetY)?ball.targetY:ball.y;module._physics_step(ball.x,ball.y,ball.z,ball.vx,ball.vy,ball.vz,ball.spin,ball.rotation,tx,ty,Math.min(.05,Math.max(0,dt)),mode);const ox=ball.x,oy=ball.y;ball.x=module._physics_get_x();ball.y=module._physics_get_y();ball.z=module._physics_get_z();ball.vx=module._physics_get_vx();ball.vy=module._physics_get_vy();ball.vz=module._physics_get_vz();ball.spin=module._physics_get_spin();ball.rotation=module._physics_get_rotation();ball.travelled+=(Math.hypot(ball.x-ox,ball.y-oy)||0);if(mode===2&&module._physics_is_stopped())ball.state='dead';return true;}
+            Prime.PhysicsBridge=Object.freeze({boot,isReady,step});if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+          })(window.Prime=window.Prime||{});
+          EOF
+          cat > physics/ball_physics.cpp <<'EOF'
+          #include <cmath>
+          #include <algorithm>
+          namespace { struct State{double x=0,y=0,z=0,vx=0,vy=0,vz=0,spin=0,rotation=0;int stopped=0;}s; constexpr double CONTROL_SPRING=24.0,CONTROL_DAMPING=9.2,GROUND_DRAG=.31,AIR_DRAG=.075,STOP_SPEED=.14,GRAVITY=16.8,BOUNCE=.39,BOUNCE_STOP=1.15,CURVE=.031,MAX_HEIGHT=14.0,CONTROL_MAX_SPEED=11.5,CONTROL_MAX_ACCEL=36.0,RADIUS=.36; inline double h(double a,double b){return std::sqrt(a*a+b*b);} }
+          extern "C" {
+          void physics_step(double x,double y,double z,double vx,double vy,double vz,double spin,double rotation,double targetX,double targetY,double dt,int mode){dt=std::clamp(dt,0.0,.05);s={x,y,z,vx,vy,vz,spin,rotation,0};if(mode==0){s.vx=s.vy=s.vz=0;s.z=std::max(0.0,s.z);s.stopped=1;return;}if(mode==1){double dx=targetX-s.x,dy=targetY-s.y,ax=dx*CONTROL_SPRING-s.vx*CONTROL_DAMPING,ay=dy*CONTROL_SPRING-s.vy*CONTROL_DAMPING,acc=h(ax,ay);if(acc>CONTROL_MAX_ACCEL){ax=ax/acc*CONTROL_MAX_ACCEL;ay=ay/acc*CONTROL_MAX_ACCEL;}s.vx+=ax*dt;s.vy+=ay*dt;double sp=h(s.vx,s.vy);if(sp>CONTROL_MAX_SPEED){s.vx=s.vx/sp*CONTROL_MAX_SPEED;s.vy=s.vy/sp*CONTROL_MAX_SPEED;}if(h(dx,dy)<.08&&sp<.18){s.x=targetX;s.y=targetY;s.vx=s.vy=0;}s.z+=(0-s.z)*std::min(1.0,dt*14.0);if(s.z<.015)s.z=0;s.vz=0;}else{bool airborne=s.z>.015||s.vz>.05;if(airborne){double drag=std::exp(-AIR_DRAG*dt);s.vx*=drag;s.vy*=drag;if(std::abs(s.spin)>.001){double sp=h(s.vx,s.vy);if(sp>.2){double nx=-s.vy/sp,ny=s.vx/sp,acc=std::min(7.5,std::abs(s.spin)*sp*CURVE),sg=s.spin<0?-1.0:1.0;s.vx+=nx*acc*sg*dt;s.vy+=ny*acc*sg*dt;s.spin*=std::exp(-.32*dt);}}s.vz-=GRAVITY*dt;}else{double drag=std::exp(-GROUND_DRAG*dt);s.vx*=drag;s.vy*=drag;}}double ox=s.x,oy=s.y;s.x+=s.vx*dt;s.y+=s.vy*dt;s.z+=s.vz*dt;double dist=h(s.x-ox,s.y-oy);if(dist>0)s.rotation+=dist/std::max(.18,RADIUS);if(s.z<=0){if(s.vz<0){double impact=std::abs(s.vz);s.z=0;if(impact>BOUNCE_STOP){s.vz=impact*BOUNCE;s.vx*=.93;s.vy*=.93;}else s.vz=0;}else s.z=0;}if(s.z>MAX_HEIGHT){s.z=MAX_HEIGHT;s.vz=std::min(0.0,s.vz);}if(mode==2&&s.z==0&&std::abs(s.vz)<.01&&h(s.vx,s.vy)<STOP_SPEED){s.vx=s.vy=s.vz=s.spin=0;s.stopped=1;}}
+          double physics_get_x(){return s.x;}double physics_get_y(){return s.y;}double physics_get_z(){return s.z;}double physics_get_vx(){return s.vx;}double physics_get_vy(){return s.vy;}double physics_get_vz(){return s.vz;}double physics_get_spin(){return s.spin;}double physics_get_rotation(){return s.rotation;}int physics_is_stopped(){return s.stopped;}
+          }
+          EOF
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+          actions-cache-folder: emsdk-cache
+      - name: Compile C++ physics to WebAssembly
+        run: |
+          emcc physics/ball_physics.cpp -O3 -s WASM=1 -s MODULARIZE=1 -s EXPORT_NAME=createPrimePhysicsModule -s ENVIRONMENT=web -s EXPORTED_FUNCTIONS='["_physics_step","_physics_get_x","_physics_get_y","_physics_get_z","_physics_get_vx","_physics_get_vy","_physics_get_vz","_physics_get_spin","_physics_get_rotation","_physics_is_stopped"]' -o physics/ball_physics.js
+      - name: Validate JavaScript
+        run: |
+          find js -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Commit v7 production runtime
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html css/main.css js/render/pitchRenderer.js js/world/ball.js js/world/physicsBridge.js physics/ball_physics.cpp physics/ball_physics.js physics/ball_physics.wasm
+          git commit -m "feat: v7 broadcast pitch with C++ WebAssembly ball physics"
+          git push
