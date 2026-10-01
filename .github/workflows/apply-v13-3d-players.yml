@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/apply-v13-3d-players.yml'
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
