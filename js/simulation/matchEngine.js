@@ -2,6 +2,7 @@
   const {Rng}=Prime;
   const {playerById,coachById,compatibleBenchMoves,swapPlayers}=Prime.Squad;
   const TOTAL=90*60;
+  const FIRST_HALF_BASE=45*60;
   const MAX_QUEUE=Prime.Balance?.visualQueueMax||5;
   const FULL_TIME_VISUAL_WAIT=Prime.Balance?.visualFlushAtFullTime||3;
   let hooks={onUpdate:null,onEvent:null,onFinish:null,onPitchRefresh:null,onFrame:null,onError:null,onHalfTime:null,onSubstitution:null,onPenaltyRequest:null};
@@ -10,7 +11,7 @@
     const m=state.match;
     if(!m)return null;
     const evt={
-      minute:Math.min(90,Math.floor((m.gameSeconds||0)/60)),
+      minute:Math.floor((m.gameSeconds||0)/60),
       text,cls:cls||'event',type:type||'INFO',data:data||null
     };
     m.events.push(evt);
@@ -234,7 +235,7 @@
     const live=livePlayer(atk,carrier.id);
     const phase=zoneFor(atk,live?live.y:(attacksTop(atk,state)?70:35),state);
     m.attackPhase=phase;
-    const minute=Math.min(90,Math.floor(m.gameSeconds/60));
+    const minute=Math.floor(m.gameSeconds/60);
     const pressure=defTac.pressing/100;
     const ca=attrs(carrier);
     const dr=ca.dribbling||70,pass=ca.passing||70,fin=ca.finishing||60;
@@ -301,16 +302,16 @@
         if(!state.match||state.match!==m||m.finished)return;
         if(outcome==='GOAL'&&(res.goalCrossed||res.forcedGoal)){
           m.score[atk]++;
-          logEvent(state,{type:'GOAL',team:atk,playerId:shooter.id,minute:Math.min(90,Math.floor(m.gameSeconds/60))});
+          logEvent(state,{type:'GOAL',team:atk,playerId:shooter.id,minute:Math.floor(m.gameSeconds/60)});
           m.poss=def;const restartPlayer=chooseCarrier(state,def,r);m.carrierId=restartPlayer?.id||null;m.possessionActions=0;m.attackPhase='KICKOFF';
           Prime.Pitch.celebrate&&Prime.Pitch.celebrate(atk,shooter.id);
           visualRestart(def,m.carrierId,'kickoff');m.stoppageWindow=true;autoCoachSubs(state,m.minute,true);
         }else if(outcome==='SAVE'){
-          logEvent(state,{type:'SAVE',team:def,keeperId:keeper(state,def)?.id,minute:Math.min(90,Math.floor(m.gameSeconds/60))});m.stats.saves[def]++;
+          logEvent(state,{type:'SAVE',team:def,keeperId:keeper(state,def)?.id,minute:Math.floor(m.gameSeconds/60)});m.stats.saves[def]++;
           m.poss=def;m.carrierId=keeper(state,def)?.id;m.possessionActions=0;m.attackPhase='TRANSITION';
           Prime.Pitch.setCarrier(def,m.carrierId);
         }else{
-          const nowMinute=Math.min(90,Math.floor(m.gameSeconds/60));
+          const nowMinute=Math.floor(m.gameSeconds/60);
           if(r()<.28){
             m.stats.corners[atk]++;logEvent(state,{type:'CORNER',team:atk,minute:nowMinute});
             m.poss=atk;const c=chooseCarrier(state,atk,r);m.carrierId=c?.id||null;m.possessionActions=Math.max(2,m.possessionActions);m.attackPhase='FINAL_THIRD';if(c)visualRestart(atk,c.id,'corner');
@@ -363,10 +364,13 @@
       const seed=state.settings.seed||'PRIME-001';
       const speed=[1,2,4].includes(Number(state.settings.speedFactor))?Number(state.settings.speedFactor):1;
       const seedHash=Rng.hashString(seed);
+      const firstHalfStoppage=1+(seedHash%10);
+      const secondHalfStoppage=1+((seedHash>>>8)%10);
       const match={
         minute:0,gameSeconds:0,score:{A:0,B:0},paused:false,rng:Rng.createSeededRng(seed),poss:'A',finished:false,
         subs:{A:0,B:0},subbedOut:{A:[],B:[]},events:[],shootout:null,halfEmitted:false,waitingHalfTime:false,secondHalf:false,speedFactor:speed,
         cards:{A:{},B:{}},sentOff:{A:[],B:[]},stoppageWindow:false,pendingPenalty:null,
+        firstHalfStoppage,secondHalfStoppage,firstHalfStoppageAnnounced:false,secondHalfStoppageAnnounced:false,
         realMatchSeconds:Number(state.settings.realMatchSeconds)||180,
         nextEventAt:16+seedHash%24,visualQueue:[],visualBusy:false,maxVisualQueue:0,
         carrierId:null,possessionActions:0,attackPhase:'BUILDUP',
@@ -398,27 +402,40 @@
   function step(state,dt,rawDt){
     const m=state.match;if(!m||m.finished||m.paused)return;
     const compression=TOTAL/Math.max(45,m.realMatchSeconds);
+    const firstHalfEnd=FIRST_HALF_BASE+(m.firstHalfStoppage||1)*60;
+    const fullTimeEnd=TOTAL+(m.secondHalfStoppage||1)*60;
     if(!m.fullTimeRequested){
       const gameDelta=dt*compression;
-      m.gameSeconds=Math.min(TOTAL,m.gameSeconds+gameDelta);
-      m.minute=Math.min(90,Math.floor(m.gameSeconds/60));
+      const periodEnd=m.secondHalf?fullTimeEnd:firstHalfEnd;
+      m.gameSeconds=Math.min(periodEnd,m.gameSeconds+gameDelta);
+      m.minute=Math.floor(m.gameSeconds/60);
       addPossession(m,gameDelta);
-      m.stamina.A=Math.max(.72,1-m.gameSeconds/TOTAL*.26);m.stamina.B=Math.max(.72,1-m.gameSeconds/TOTAL*.26);
-      if(!m.halfEmitted&&m.gameSeconds>=45*60){m.halfEmitted=true;m.gameSeconds=45*60;m.minute=45;m.waitingHalfTime=true;m.paused=true;m.stoppageWindow=true;Prime.GameLoop.setPaused(true);emit(state,"45' — Intervalo.",'event','HALF_TIME');hooks.onEvent&&hooks.onEvent({type:'OVERLAY',data:{kind:'half'}},state);autoCoachSubs(state,45,true);hooks.onHalfTime&&hooks.onHalfTime(state);update(state);return;}
+      m.stamina.A=Math.max(.72,1-Math.min(TOTAL,m.gameSeconds)/TOTAL*.26);m.stamina.B=Math.max(.72,1-Math.min(TOTAL,m.gameSeconds)/TOTAL*.26);
+
+      if(!m.secondHalf&&!m.firstHalfStoppageAnnounced&&m.gameSeconds>=FIRST_HALF_BASE){
+        m.firstHalfStoppageAnnounced=true;
+        emit(state,`45' — ⏱️ o árbitro indica +${m.firstHalfStoppage} minuto${m.firstHalfStoppage===1?'':'s'} de acréscimo.`,'event','STOPPAGE_TIME',{half:1,minutes:m.firstHalfStoppage});
+      }
+      if(!m.halfEmitted&&!m.secondHalf&&m.gameSeconds>=firstHalfEnd){
+        m.halfEmitted=true;m.gameSeconds=firstHalfEnd;m.minute=45+(m.firstHalfStoppage||1);m.waitingHalfTime=true;m.paused=true;m.stoppageWindow=true;Prime.GameLoop.setPaused(true);
+        emit(state,`${m.minute}' — Intervalo.`,'event','HALF_TIME');hooks.onEvent&&hooks.onEvent({type:'OVERLAY',data:{kind:'half'}},state);autoCoachSubs(state,45,true);hooks.onHalfTime&&hooks.onHalfTime(state);update(state);return;
+      }
+      if(m.secondHalf&&!m.secondHalfStoppageAnnounced&&m.gameSeconds>=TOTAL){
+        m.secondHalfStoppageAnnounced=true;
+        emit(state,`90' — ⏱️ o árbitro indica +${m.secondHalfStoppage} minuto${m.secondHalfStoppage===1?'':'s'} de acréscimo.`,'event','STOPPAGE_TIME',{half:2,minutes:m.secondHalfStoppage});
+      }
+
       // Uma nova etapa tática só nasce quando a etapa visual anterior terminou.
-      // Isso evita o efeito de ping-pong e mantém a jogada legível no campo.
-      if(m.gameSeconds>=m.nextEventAt&&m.gameSeconds<TOTAL&&!m.visualBusy&&!m.visualQueue.length&&!(Prime.Pitch?.isActionActive?.())){
+      if(m.gameSeconds>=m.nextEventAt&&m.gameSeconds<periodEnd&&!m.visualBusy&&!m.visualQueue.length&&!(Prime.Pitch?.isActionActive?.())){
         generateEvent(state);
         const tempo=(tactics(state,m.poss).tempo||65);
         const base=Math.max(Prime.Balance?.event?.baseGapMin||34,(Prime.Balance?.event?.baseGapMax||64)-tempo*.22);
         m.nextEventAt=m.gameSeconds+base+m.rng()*20;
       }
-      if(m.gameSeconds>=TOTAL){m.fullTimeRequested=true;m.fullTimeWait=0;emit(state,"90' — fim do tempo regulamentar.",'event','FULL_TIME_WAIT');}
+      if(m.secondHalf&&m.gameSeconds>=fullTimeEnd){m.fullTimeRequested=true;m.fullTimeWait=0;emit(state,`${90+(m.secondHalfStoppage||1)}' — fim da partida.`,'event','FULL_TIME_WAIT');}
     }else{
       m.fullTimeWait+=(rawDt||dt||0);
-      if((!m.visualBusy&&!m.visualQueue.length)||m.fullTimeWait>=FULL_TIME_VISUAL_WAIT){
-        flushVisuals(state);finishRegulation(state);return;
-      }
+      if((!m.visualBusy&&!m.visualQueue.length)||m.fullTimeWait>=FULL_TIME_VISUAL_WAIT){flushVisuals(state);finishRegulation(state);return;}
     }
     update(state);
   }
@@ -442,7 +459,7 @@
   }
   function startSecondHalf(state){
     const m=state.match;if(!m||!m.waitingHalfTime)return {ok:false,error:'A partida não está no intervalo.'};
-    flushVisuals(state);m.waitingHalfTime=false;m.secondHalf=true;m.paused=false;m.stoppageWindow=false;m.attackPhase='KICKOFF';
+    flushVisuals(state);m.waitingHalfTime=false;m.secondHalf=true;m.paused=false;m.stoppageWindow=false;m.attackPhase='KICKOFF';m.gameSeconds=FIRST_HALF_BASE;m.minute=45;m.secondHalfStoppageAnnounced=false;
     refreshPitch(state);const key='B',carrier=chooseCarrier(state,key,m.rng);m.poss=key;m.carrierId=carrier?.id||null;if(m.carrierId)visualRestart(key,m.carrierId,'kickoff');
     emit(state,"46' — começa o segundo tempo. Os times trocaram de lado.",'event','SECOND_HALF');Prime.GameLoop.setPaused(false);update(state);return {ok:true};
   }
@@ -487,11 +504,11 @@
     return {ok:true,scored};
   }
   function finishAfterShootout(state){
-    const m=state.match;if(!m)return;emit(state,`Pênaltis: ${state.teams.A.name} ${m.shootout.A} x ${m.shootout.B} ${state.teams.B.name}.`,'goal','SHOOTOUT',m.shootout);m.finished=true;m.gameSeconds=TOTAL;m.minute=90;Prime.GameLoop.setPaused(true);emit(state,'Fim de jogo.','event','FULL_TIME');update(state);hooks.onFinish&&hooks.onFinish(state);
+    const m=state.match;if(!m)return;emit(state,`Pênaltis: ${state.teams.A.name} ${m.shootout.A} x ${m.shootout.B} ${state.teams.B.name}.`,'goal','SHOOTOUT',m.shootout);m.finished=true;m.gameSeconds=TOTAL+(m.secondHalfStoppage||1)*60;m.minute=90+(m.secondHalfStoppage||1);Prime.GameLoop.setPaused(true);emit(state,'Fim de jogo.','event','FULL_TIME');update(state);hooks.onFinish&&hooks.onFinish(state);
   }
   function finishRegulation(state){
     const m=state.match;if(!m||m.finished)return;
-    flushVisuals(state);m.gameSeconds=TOTAL;m.minute=90;Prime.GameLoop.setPaused(true);
+    flushVisuals(state);m.gameSeconds=TOTAL+(m.secondHalfStoppage||1)*60;m.minute=90+(m.secondHalfStoppage||1);Prime.GameLoop.setPaused(true);
     if(m.score.A===m.score.B){emit(state,'Fim do tempo regulamentar. Vamos aos pênaltis.','event','PENALTY_SHOOTOUT');startShootout(state);update(state);return;}
     m.finished=true;emit(state,'Fim de jogo.','event','FULL_TIME');update(state);hooks.onFinish&&hooks.onFinish(state);
   }
