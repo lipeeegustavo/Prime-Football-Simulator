@@ -1,337 +1,129 @@
-/* Prime Football Simulator — professional mobile match UI v11 */
+/* Prime Football Simulator — mobile / broadcast polish v11 */
 
-/* Desktop keeps the broadcast presentation and subtle pitch depth. */
+/* Desktop broadcast depth */
 .stadium-card{
-  perspective:1400px;
-  perspective-origin:50% 38%;
-  background:linear-gradient(180deg,#07160d,#051009);
-  box-shadow:0 20px 60px rgba(0,0,0,.32),inset 0 0 0 1px rgba(255,255,255,.025);
+  perspective:1600px;
+  perspective-origin:50% 42%;
+  background:linear-gradient(180deg,#07160d 0%,#041008 100%);
+  box-shadow:0 22px 70px rgba(0,0,0,.34),inset 0 0 0 1px rgba(255,255,255,.025);
 }
-.pitch-stage{
-  overflow:visible;
-  transform-style:preserve-3d;
-  filter:drop-shadow(0 16px 22px rgba(0,0,0,.24));
-}
+.pitch-stage{overflow:visible;transform-style:preserve-3d;filter:drop-shadow(0 16px 22px rgba(0,0,0,.24))}
 .pitch-canvas{
-  transform-origin:50% 100%;
-  transform:perspective(1800px) rotateX(2.2deg);
-  border:1px solid rgba(255,255,255,.2);
-  box-shadow:inset 0 0 44px rgba(0,0,0,.13);
+  transform-origin:50% 72%;
+  transform:perspective(1800px) rotateX(4.5deg);
+  border:1px solid rgba(255,255,255,.18);
+  box-shadow:inset 0 0 44px rgba(0,0,0,.14),0 12px 32px rgba(0,0,0,.18);
 }
+.camera-controls{backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.narration-drawer{background:rgba(8,28,17,.97);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
 
+/* Goal depth frame only in full camera. Canvas also draws the real posts/net. */
 .pitch-stage:has([data-camera="full"].active)::before,
 .pitch-stage:has([data-camera="full"].active)::after{
-  content:"";
-  position:absolute;
-  z-index:2;
-  top:38%;
-  width:3.4%;
-  height:24%;
-  pointer-events:none;
-  border:3px solid rgba(255,255,255,.96);
-  background:
-    repeating-linear-gradient(0deg,rgba(255,255,255,.25) 0 1px,transparent 1px 8px),
-    repeating-linear-gradient(90deg,rgba(255,255,255,.22) 0 1px,transparent 1px 8px),
-    rgba(235,245,238,.035);
-  box-shadow:0 5px 10px rgba(0,0,0,.28),inset 0 0 10px rgba(255,255,255,.08);
+  content:"";position:absolute;z-index:2;top:38%;width:3.3%;height:24%;pointer-events:none;
+  border:2px solid rgba(255,255,255,.82);
+  background:repeating-linear-gradient(0deg,rgba(255,255,255,.18) 0 1px,transparent 1px 8px),repeating-linear-gradient(90deg,rgba(255,255,255,.16) 0 1px,transparent 1px 8px),rgba(235,245,238,.025);
+  box-shadow:0 5px 12px rgba(0,0,0,.28);
 }
-.pitch-stage:has([data-camera="full"].active)::before{
-  left:-1.65%;
-  border-right-width:1px;
-  transform:perspective(220px) rotateY(-23deg) skewY(-1deg);
-  transform-origin:right center;
-}
-.pitch-stage:has([data-camera="full"].active)::after{
-  right:-1.65%;
-  border-left-width:1px;
-  transform:perspective(220px) rotateY(23deg) skewY(1deg);
-  transform-origin:left center;
-}
-
-.camera-controls{backdrop-filter:blur(10px)}
-.narration-drawer{background:rgba(8,28,17,.97);backdrop-filter:blur(20px)}
+.pitch-stage:has([data-camera="full"].active)::before{left:-1.55%;border-right-width:1px;transform:perspective(220px) rotateY(-24deg);transform-origin:right center}
+.pitch-stage:has([data-camera="full"].active)::after{right:-1.55%;border-left-width:1px;transform:perspective(220px) rotateY(24deg);transform-origin:left center}
 
 @media(max-width:700px){
-  :root{--mobile-gap:10px;--mobile-radius:18px}
   html,body{overflow-x:hidden}
-  body:has(.match-page){background:#07160d}
+  body{padding-bottom:env(safe-area-inset-bottom)}
 
-  /* App chrome: compact and visually centered. */
-  body:has(.match-page) .topbar{
-    height:52px;
-    min-height:52px;
-    padding:6px 14px;
-    padding-top:max(6px,env(safe-area-inset-top));
-    position:sticky;
-    top:0;
-    z-index:80;
-    background:rgba(7,22,13,.96);
-    border-bottom:1px solid rgba(182,242,58,.12);
-    box-shadow:0 8px 24px rgba(0,0,0,.16);
-  }
-  body:has(.match-page) .brand{gap:8px;min-width:0}
-  body:has(.match-page) .brand-mark{width:34px;height:34px;border-radius:10px;font-size:1.04rem;box-shadow:none}
-  body:has(.match-page) .brand strong{font-size:.92rem;letter-spacing:-.015em}
-  body:has(.match-page) .brand small{display:none}
-  body:has(.match-page) .seed-chip{display:none!important}
-  body:has(.match-page) #homeBtn{min-height:34px;padding:6px 10px;font-size:.7rem;border-radius:10px}
-
-  /* The stepper is useful during setup, not while watching the match. */
+  /* Header and global spacing */
+  body:has(.match-page) .topbar{height:52px;padding:max(6px,env(safe-area-inset-top)) 12px 6px;position:sticky;top:0}
+  body:has(.match-page) .brand{gap:7px}
+  body:has(.match-page) .brand-mark{width:31px;height:31px;border-radius:9px;font-size:1rem}
+  body:has(.match-page) .brand strong{font-size:.82rem}
+  body:has(.match-page) .brand small,body:has(.match-page) .seed-chip,body:has(.match-page) #homeBtn{display:none!important}
   body:has(.match-page) .progress-shell{display:none!important}
-  body:has(.match-page) .app-shell{
-    width:100%;
-    max-width:none;
-    margin:0;
-    padding:10px 10px calc(22px + env(safe-area-inset-bottom));
-  }
-  .match-page{width:100%;max-width:100%;gap:10px;margin:0 auto}
+  body:has(.match-page) .app-shell{padding:8px 8px calc(28px + env(safe-area-inset-bottom));width:100%;max-width:none}
+  .match-page{gap:9px;width:100%;max-width:680px;margin:0 auto}
 
-  /* Compact broadcast scoreboard. */
+  /* Scoreboard */
   .scoreboard{
-    min-height:82px;
-    width:100%;
-    grid-template-columns:minmax(0,1fr) 104px minmax(0,1fr);
-    gap:8px;
-    padding:10px 12px;
-    border-radius:20px;
-    border:1px solid rgba(82,127,96,.52);
-    background:linear-gradient(180deg,rgba(16,43,27,.98),rgba(10,31,20,.98));
-    box-shadow:0 10px 30px rgba(0,0,0,.2),inset 0 1px rgba(255,255,255,.025);
+    min-height:72px;grid-template-columns:minmax(0,1fr) 92px minmax(0,1fr);padding:8px 11px;border-radius:17px;gap:6px;
+    background:linear-gradient(180deg,rgba(18,38,27,.98),rgba(12,31,21,.98));box-shadow:0 12px 30px rgba(0,0,0,.17)
   }
-  .score-team{gap:8px;min-width:0;align-items:center}
-  .score-team.b{justify-content:flex-end}
-  .score-team-name{font-size:.78rem;line-height:1.1;font-weight:900}
-  .team-dot{width:10px;height:10px;box-shadow:0 0 0 3px rgba(255,255,255,.035)}
-  .score-center{display:grid;justify-items:center;gap:1px}
-  .score-value{font-size:1.75rem;line-height:.95;letter-spacing:-.055em}
-  .match-clock{font-size:.82rem;line-height:1;color:var(--gold)}
-  .half-label{font-size:.54rem;line-height:1.1;letter-spacing:.12em}
+  .score-team{gap:6px}.score-team-name{font-size:.74rem}.team-dot{width:9px;height:9px}
+  .score-value{font-size:1.48rem;letter-spacing:-.04em}.match-clock{font-size:.74rem}.half-label{font-size:.54rem;letter-spacing:.11em}
 
-  /* Pitch becomes the hero card. */
-  .stadium-card{
-    padding:6px;
-    overflow:visible;
-    border-radius:20px;
-    border:1px solid rgba(74,120,89,.62);
-    background:linear-gradient(180deg,#092318,#07170f);
-    box-shadow:0 16px 42px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.025);
-  }
-  .pitch-stage{
-    width:100%;
-    aspect-ratio:16/10!important;
-    min-height:0!important;
-    max-height:none!important;
-    border-radius:16px;
-    overflow:visible;
-    filter:drop-shadow(0 10px 20px rgba(0,0,0,.2));
-  }
-  .pitch-canvas{
-    width:100%!important;
-    height:100%!important;
-    min-height:0!important;
-    display:block;
-    border-radius:15px;
-    border:1px solid rgba(255,255,255,.18);
-    transform:perspective(1000px) rotateX(1.2deg);
-  }
-  .pitch-stage:has([data-camera="full"].active)::before,
-  .pitch-stage:has([data-camera="full"].active)::after{
-    border-width:2px;
-    width:4%;
-    height:24%;
-    top:38%;
-    opacity:.92;
-  }
-  .pitch-stage:has([data-camera="full"].active)::before{left:-1.85%}
-  .pitch-stage:has([data-camera="full"].active)::after{right:-1.85%}
+  /* Match stage: larger and visually dominant on portrait phones */
+  .stadium-card{padding:4px;border-radius:18px;overflow:visible}
+  .pitch-stage{aspect-ratio:4/3!important;width:100%;min-height:0!important;border-radius:15px}
+  .pitch-canvas{border-radius:14px;transform:perspective(1200px) rotateX(6deg);transform-origin:50% 78%}
+  .pitch-stage:has([data-camera="full"].active)::before,.pitch-stage:has([data-camera="full"].active)::after{display:none!important}
 
-  /* Camera controls: compact floating toolbar, centered. */
+  /* Compact, centered broadcast mode switch. Never a large card over the pitch. */
   .camera-controls{
-    left:50%;
-    right:auto;
-    top:8px;
-    transform:translateX(-50%);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    gap:4px;
-    padding:4px;
-    max-width:calc(100% - 16px);
-    border:1px solid rgba(255,255,255,.12);
-    border-radius:13px;
-    background:rgba(5,22,12,.78);
-    box-shadow:0 8px 20px rgba(0,0,0,.22);
+    left:50%!important;right:auto!important;top:8px!important;transform:translateX(-50%);
+    display:grid!important;grid-template-columns:auto auto auto!important;gap:3px!important;
+    width:max-content!important;max-width:calc(100% - 20px)!important;padding:3px!important;
+    border:1px solid rgba(255,255,255,.12);border-radius:999px!important;background:rgba(4,18,10,.78)!important;
+    box-shadow:0 7px 20px rgba(0,0,0,.26);z-index:9
   }
   .camera-btn{
-    min-height:32px!important;
-    padding:6px 9px!important;
-    border-radius:9px!important;
-    font-size:.64rem!important;
-    font-weight:900!important;
-    white-space:nowrap;
+    min-height:32px!important;padding:6px 9px!important;font-size:.62rem!important;border-radius:999px!important;
+    white-space:nowrap!important;line-height:1!important;background:transparent!important;border-color:transparent!important
   }
-  .camera-btn.active{box-shadow:0 4px 14px rgba(182,242,58,.12)}
+  .camera-btn.active{background:var(--accent)!important;color:#0c1b0f!important;border-color:var(--accent)!important;box-shadow:none!important}
 
-  /* Controls: one compact command deck. */
+  /* Controls */
   .match-controls{
-    display:grid!important;
-    grid-template-columns:1fr 1fr;
-    grid-template-areas:
-      "pause sub"
-      "speed speed"
-      "restart restart";
-    gap:8px!important;
-    margin-top:10px!important;
-    padding:10px!important;
-    border:1px solid rgba(74,120,89,.52);
-    border-radius:18px;
-    background:linear-gradient(180deg,rgba(14,40,25,.95),rgba(8,28,17,.95));
-    box-shadow:inset 0 1px rgba(255,255,255,.025);
+    display:grid!important;grid-template-columns:1fr 1fr;gap:7px!important;padding:9px!important;margin-top:8px!important;
+    border:1px solid var(--line);border-radius:16px;background:rgba(13,36,23,.90);box-shadow:0 10px 28px rgba(0,0,0,.13)
   }
-  .match-controls>.btn{
-    width:100%;
-    min-height:48px;
-    padding:9px 10px;
-    border-radius:13px;
-    font-size:.8rem;
-    font-weight:900;
-  }
-  #pauseBtn{grid-area:pause}
-  #subBtn{grid-area:sub}
-  #restartBtn{grid-area:restart;min-height:38px!important;background:rgba(255,255,255,.015);font-size:.74rem}
-  .match-controls>.segmented{
-    grid-area:speed;
-    display:grid!important;
-    grid-template-columns:repeat(3,1fr);
-    width:100%;
-    gap:4px;
-    padding:4px;
-    border:1px solid rgba(76,121,91,.46);
-    border-radius:13px;
-    background:rgba(5,21,12,.55);
-  }
-  .match-controls>.segmented button{
-    min-height:40px;
-    padding:5px;
-    border-radius:9px;
-    font-size:.82rem;
-    font-weight:950;
-  }
-
-  /* Stats become a slim, balanced strip. */
-  .stat-strip{
-    display:grid!important;
-    grid-template-columns:repeat(3,1fr);
-    gap:8px!important;
-    margin-top:10px!important;
-  }
-  .mini-stat{
-    min-width:0;
-    min-height:64px;
-    padding:10px 6px!important;
-    display:grid;
-    place-items:center;
-    align-content:center;
-    gap:3px;
-    border-radius:15px!important;
-    border:1px solid rgba(74,120,89,.48)!important;
-    background:linear-gradient(180deg,rgba(14,39,25,.9),rgba(8,28,17,.9))!important;
-  }
-  .mini-stat strong{font-size:.92rem!important;line-height:1.1;letter-spacing:-.02em}
-  .mini-stat small{font-size:.61rem!important;line-height:1;color:var(--text-soft);letter-spacing:.03em}
+  .match-controls>.btn{width:100%;min-height:44px;padding:8px 9px;font-size:.79rem;border-radius:11px}
+  .match-controls>.segmented{grid-column:1/-1;display:grid!important;grid-template-columns:repeat(3,1fr);width:100%;order:3}
+  .match-controls>.segmented button{min-height:40px;font-size:.8rem;padding:6px;border-radius:10px}
+  #pauseBtn{grid-column:1/2;order:1}#subBtn{grid-column:2/3;order:2}#restartBtn{grid-column:1/-1;order:4;min-height:38px!important;background:transparent}
+  .stat-strip{display:grid!important;grid-template-columns:repeat(3,1fr);gap:7px!important;margin-top:8px!important}
+  .mini-stat{padding:8px 4px!important;min-height:60px;border-radius:13px!important}.mini-stat strong{font-size:.88rem!important}.mini-stat small{font-size:.62rem!important}
   .physics-readout{display:none!important}
 
-  /* Narration is a clean bottom sheet with enough breathing room. */
+  /* Narration = clean bottom sheet */
   .narration-drawer{
-    position:fixed!important;
-    left:10px!important;
-    right:10px!important;
-    top:auto!important;
-    bottom:calc(10px + env(safe-area-inset-bottom))!important;
-    width:auto!important;
-    height:min(58svh,500px)!important;
-    z-index:150!important;
-    overflow:hidden!important;
-    border:1px solid rgba(79,129,96,.62)!important;
-    border-radius:22px!important;
-    background:linear-gradient(180deg,rgba(14,42,26,.99),rgba(6,24,14,.99))!important;
-    box-shadow:0 -18px 60px rgba(0,0,0,.52)!important;
-    transform:translateY(calc(100% + 34px))!important;
-    transition:transform .26s cubic-bezier(.22,.7,.25,1)!important;
-    pointer-events:none!important;
-  }
-  .narration-drawer::before{
-    content:"";
-    display:block;
-    width:44px;
-    height:4px;
-    margin:8px auto 0;
-    border-radius:999px;
-    background:rgba(255,255,255,.2);
+    position:fixed!important;left:10px!important;right:10px!important;bottom:calc(10px + env(safe-area-inset-bottom))!important;top:auto!important;
+    width:auto!important;height:min(52svh,430px)!important;z-index:120!important;border:1px solid var(--line);border-radius:22px!important;
+    box-shadow:0 -16px 54px rgba(0,0,0,.48);transform:translateY(calc(100% + 34px))!important;pointer-events:none!important;overflow:hidden
   }
   .narration-drawer.open{transform:translateY(0)!important;pointer-events:auto!important}
-  .narration-head{
-    position:sticky;
-    top:0;
-    z-index:2;
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    padding:9px 12px 10px!important;
-    background:rgba(11,34,21,.98);
-    border-bottom:1px solid rgba(77,126,94,.42);
-  }
-  .narration-head h3{font-size:.88rem;margin:0;letter-spacing:-.01em}
-  .narration-head .icon-btn{width:34px;height:34px;border-radius:10px;font-size:1.1rem}
-  .feed-list{
-    padding:8px 10px 14px!important;
-    overflow:auto!important;
-    height:calc(100% - 62px)!important;
-    -webkit-overflow-scrolling:touch;
-  }
-  .feed-event{
-    display:grid!important;
-    grid-template-columns:32px 24px minmax(0,1fr)!important;
-    align-items:start!important;
-    gap:7px!important;
-    margin:0 0 7px!important;
-    padding:10px 10px!important;
-    border-radius:13px!important;
-    border:1px solid rgba(75,120,90,.42)!important;
-    background:rgba(9,31,19,.72)!important;
-    font-size:.76rem!important;
-    line-height:1.38!important;
-  }
-  .feed-minute{font-size:.7rem!important;color:#91a99a!important;padding-top:1px}
-  .feed-icon{text-align:center}
+  .narration-head{position:sticky;top:0;background:rgba(8,28,17,.99);z-index:2;padding:12px 13px!important;border-bottom:1px solid rgba(255,255,255,.06)}
+  .narration-head::before{content:"";display:block;width:38px;height:4px;border-radius:99px;background:#4b6656;margin:-3px auto 8px}
+  .narration-head h3{font-size:.88rem;margin:0}.feed-list{padding:6px 9px 12px!important;overflow:auto!important;-webkit-overflow-scrolling:touch}
+  .feed-event{grid-template-columns:34px 25px 1fr!important;gap:5px!important;padding:9px 8px!important;font-size:.74rem!important;border-radius:12px!important}.feed-minute{font-size:.7rem!important}
 
-  /* Match feedback layers fit the viewport instead of fighting the field. */
-  .substitution-card{left:10px!important;right:10px!important;top:auto!important;bottom:10px!important;width:auto!important;max-width:none!important;border-radius:16px!important}
-  .half-time-panel,.penalty-panel{padding:10px!important;align-items:flex-end!important}
-  .half-card,.penalty-card{width:100%!important;max-height:78svh;overflow:auto;border-radius:20px!important;padding:18px!important}
-  .penalty-goal{min-height:190px!important}
-
-  /* Dialogs are centered, readable and finger-friendly. */
-  .game-dialog{
-    width:calc(100% - 20px)!important;
-    max-width:520px!important;
-    margin:auto!important;
-    padding:0!important;
-    border-radius:22px!important;
+  /* Toasts: always top, never on top of Continue/Play/phone browser bar. */
+  .toast-root{
+    position:fixed!important;top:calc(env(safe-area-inset-top) + 64px)!important;bottom:auto!important;left:50%!important;right:auto!important;
+    transform:translateX(-50%)!important;width:min(92vw,430px)!important;z-index:300!important;display:grid!important;gap:7px!important;pointer-events:none!important
   }
-  .game-dialog .dialog-card{max-height:80svh;overflow:auto;padding:18px!important;border-radius:22px!important}
-  .game-dialog label{gap:7px}
-  .game-dialog select{min-height:48px}
-  .game-dialog .dialog-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  .game-dialog .dialog-actions .btn{width:100%;min-height:46px}
+  .toast{width:100%!important;margin:0!important;box-shadow:0 12px 34px rgba(0,0,0,.38)!important;border-radius:14px!important;padding:11px 13px!important;font-size:.76rem!important;backdrop-filter:blur(16px)}
+
+  /* Builder: one centered column with consistent width and comfortable bottom safe area. */
+  body:not(:has(.match-page)) .app-shell{padding-left:12px;padding-right:12px;padding-bottom:calc(120px + env(safe-area-inset-bottom))}
+  body:not(:has(.match-page)) .screen{width:100%;max-width:680px;margin-inline:auto}
+  .builder-layout{width:100%;max-width:680px;margin-inline:auto;justify-items:center}
+  .tactical-card,.builder-sidebar,.picker-panel{width:100%;max-width:680px;margin-inline:auto}
+  .builder-pitch{width:min(100%,520px)!important;margin-inline:auto!important}
+  .form-grid{grid-template-columns:1fr!important}.progress-badges{justify-content:center!important}
+  .section-tabs{justify-content:flex-start;width:100%;scrollbar-width:none}.section-tabs::-webkit-scrollbar{display:none}
+  .picker-panel{padding:14px!important}.picker-panel .eyebrow,.picker-panel h3{text-align:center}
+  .toolbar{grid-template-columns:1fr!important;gap:8px!important}
+  .player-grid{width:100%;max-height:none!important;overflow:visible!important;gap:9px!important}
+  .player-card{width:100%!important;grid-template-columns:48px minmax(0,1fr)!important;grid-template-areas:"ovr info" "attrs attrs";align-items:center!important;padding:11px!important}
+  .player-ovr{grid-area:ovr}.player-card>div:nth-child(2){grid-area:info;min-width:0}.attr-row{grid-area:attrs;justify-content:flex-start!important;margin-left:0!important}
+  .player-name{font-size:.86rem!important}.player-meta{font-size:.68rem!important}
+  .split-actions{width:100%;max-width:680px;margin-inline:auto;gap:8px}.split-actions>.btn{flex:1 1 150px}
+
+  .substitution-card{left:10px!important;right:10px!important;top:auto!important;bottom:10px!important;width:auto!important;max-width:none!important}
+  .half-time-panel,.penalty-panel{padding:10px!important;align-items:flex-end!important}.half-card,.penalty-card{width:100%!important;max-height:80svh;overflow:auto;border-radius:20px!important;padding:17px!important}.penalty-goal{min-height:190px!important}
+  .game-dialog{width:calc(100% - 20px)!important;max-width:none!important;margin:auto 10px 10px!important}.game-dialog .dialog-card{max-height:80svh;overflow:auto;padding:16px!important;border-radius:20px!important}
 }
 
 @media(max-width:390px){
-  body:has(.match-page) .app-shell{padding-left:7px;padding-right:7px}
-  .scoreboard{grid-template-columns:minmax(0,1fr) 92px minmax(0,1fr);padding:9px 9px}
-  .score-team-name{font-size:.69rem}
-  .score-value{font-size:1.58rem}
-  .camera-btn{font-size:.58rem!important;padding:5px 7px!important}
-  .match-controls>.btn{font-size:.75rem}
-  .mini-stat strong{font-size:.84rem!important}
+  .scoreboard{grid-template-columns:minmax(0,1fr) 84px minmax(0,1fr)}.score-team-name{font-size:.68rem}.score-value{font-size:1.34rem}
+  .camera-btn{font-size:.57rem!important;padding:6px 7px!important}.match-controls>.btn{font-size:.74rem}
 }
