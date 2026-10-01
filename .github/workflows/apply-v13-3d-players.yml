@@ -1,0 +1,55 @@
+name: Apply v13 3D Player Markers
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-v13-3d-players.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch 3D player discs
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('js/render/pitchRenderer.js')
+          s=p.read_text()
+          old="""    const col=p.isKeeper?(p.key==='A'?'#F8D34D':'#B6F23A'):teamColor(p.key);
+    ctx.fillStyle=col;ctx.strokeStyle='#F7FAF8';ctx.lineWidth=Math.max(2,r*.14);ctx.beginPath();ctx.arc(bodyX,bodyY,r,0,Math.PI*2);ctx.fill();ctx.stroke();
+    // direção corporal / ombros: pequena barra perpendicular ao movimento.
+"""
+          new="""    const col=p.isKeeper?(p.key==='A'?'#F8D34D':'#B6F23A'):teamColor(p.key);
+    // Marcador 2.5D: base cilíndrica + topo com luz. Mantém o jogador circular,
+    // mas dá volume para combinar com a câmera inclinada do campo.
+    const discDepth=Math.max(3,r*.34),sideY3D=bodyY+discDepth*.72;
+    const sideGrad=ctx.createLinearGradient(bodyX-r,bodyY,bodyX+r,sideY3D+discDepth);
+    sideGrad.addColorStop(0,'rgba(5,17,11,.88)');
+    sideGrad.addColorStop(.5,col);
+    sideGrad.addColorStop(1,'rgba(4,12,8,.92)');
+    ctx.fillStyle=sideGrad;ctx.beginPath();ctx.ellipse(bodyX,sideY3D,r,r*.56,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,.26)';ctx.beginPath();ctx.ellipse(bodyX+2,sideY3D+discDepth*.55,r*.94,r*.34,0,0,Math.PI*2);ctx.fill();
+    const topGrad=ctx.createRadialGradient(bodyX-r*.38,bodyY-r*.45,r*.08,bodyX,bodyY,r*1.08);
+    topGrad.addColorStop(0,'#FFFFFF');topGrad.addColorStop(.14,col);topGrad.addColorStop(.74,col);topGrad.addColorStop(1,'rgba(5,22,12,.96)');
+    ctx.fillStyle=topGrad;ctx.strokeStyle='#F7FAF8';ctx.lineWidth=Math.max(2,r*.14);ctx.beginPath();ctx.arc(bodyX,bodyY,r,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,.42)';ctx.lineWidth=Math.max(1,r*.08);ctx.beginPath();ctx.arc(bodyX-r*.12,bodyY-r*.10,r*.64,Math.PI*1.08,Math.PI*1.72);ctx.stroke();
+    // direção corporal / ombros: pequena barra perpendicular ao movimento.
+"""
+          if old not in s:
+              raise SystemExit('3D player marker block not found')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+      - name: Validate renderer
+        run: node --check js/render/pitchRenderer.js
+      - name: Commit production renderer
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add js/render/pitchRenderer.js
+          git commit -m 'feat: v13 3D circular player markers'
+          git push
