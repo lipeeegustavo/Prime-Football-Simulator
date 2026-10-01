@@ -112,9 +112,9 @@
       case'CUT_INSIDE':text=`${evt.minute}' — ${p(evt.playerId)} corta para dentro.`;break;
       case'CROSS':text=`${evt.minute}' — ${p(evt.fromId)} cruza para ${p(evt.toId)}.`;break;
       case'TACKLE':text=`${evt.minute}' — ${p(evt.playerId)} ganha no desarme.`;break;
-      case'FOUL':text=`${evt.minute}' — falta marcada por ${p(evt.playerId)}.`;break;
-      case'YELLOW_CARD':text=`${evt.minute}' — 🟨 amarelo para ${p(evt.playerId)}.`;break;
-      case'RED_CARD':text=`${evt.minute}' — 🟥 ${p(evt.playerId)} expulso.`;cls='danger';break;
+      case'FOUL':text=`${evt.minute}' — falta de ${p(evt.playerId)}${evt.reason?` por ${evt.reason}`:''}.`;break;
+      case'YELLOW_CARD':text=`${evt.minute}' — 🟨 amarelo para ${p(evt.playerId)}${evt.reason?` por ${evt.reason}`:''}.`;break;
+      case'RED_CARD':text=evt.secondYellow?`${evt.minute}' — 🟥 ${p(evt.playerId)} expulso: segundo amarelo${evt.reason?` por ${evt.reason}`:''}.`:`${evt.minute}' — 🟥 vermelho direto para ${p(evt.playerId)}${evt.reason?` por ${evt.reason}`:''}.`;cls='danger';break;
       case'CORNER':text=`${evt.minute}' — escanteio para ${state.teams[evt.team].name}.`;break;
       case'THROW_IN':text=`${evt.minute}' — lateral para ${state.teams[evt.team].name}.`;break;
       case'GOAL_KICK':text=`${evt.minute}' — tiro de meta para ${state.teams[evt.team].name}.`;break;
@@ -192,18 +192,29 @@
     },r);
   }
 
-  function disciplineAfterFoul(state,team,playerId,minute){
+  function pickFoulReason(m,severity){
+    const normal=['carrinho atrasado','puxão de camisa','entrada imprudente','parar um contra-ataque','chegada fora do tempo','calço por trás'];
+    const serious=['entrada por trás com força excessiva','carrinho com sola alta','impedir uma chance clara de gol','entrada violenta sem disputar a bola'];
+    const list=severity==='red'?serious:normal;
+    return list[Math.floor(m.rng()*list.length)];
+  }
+
+  function disciplineAfterFoul(state,team,playerId,minute,reason){
     const m=state.match;if(!m||!playerId)return;
     const p=playerById(playerId);if(!p||p.group==='GOL')return;
     const r=m.rng,n=r();
-    let card=null;
-    if(n<.035)card='RED_CARD';
+    let card=null,directRed=false,secondYellow=false,cardReason=reason||pickFoulReason(m,'normal');
+    if(n<.035){card='RED_CARD';directRed=true;cardReason=pickFoulReason(m,'red');}
     else if(n<.29)card='YELLOW_CARD';
     if(!card)return;
     const key=String(playerId),count=(m.cards[team][key]||0);
-    if(card==='YELLOW_CARD'){m.cards[team][key]=count+1;m.stats.yellow[team]++;if(count+1>=2){card='RED_CARD';m.stats.yellow[team]=Math.max(0,m.stats.yellow[team]-1);}}
+    if(card==='YELLOW_CARD'){
+      m.cards[team][key]=count+1;m.stats.yellow[team]++;
+      if(count+1>=2){card='RED_CARD';secondYellow=true;m.stats.yellow[team]=Math.max(0,m.stats.yellow[team]-1);}
+    }
     if(card==='RED_CARD'&&!m.sentOff[team].includes(key)){m.sentOff[team].push(key);m.stats.red[team]++;}
-    const evt={type:card,team,playerId,minute};logEvent(state,evt);queueVisual(state,evt,()=>{if(card==='RED_CARD')refreshPitch(state);});
+    const evt={type:card,team,playerId,minute,reason:cardReason,directRed,secondYellow};
+    logEvent(state,evt);queueVisual(state,evt,()=>{if(card==='RED_CARD')refreshPitch(state);});
   }
   function announceSub(state,key,outId,inId,minute){
     const evt={type:'SUBSTITUTION',team:key,outId,inId,minute};
@@ -232,10 +243,10 @@
 
     // Bola parada e saídas de campo dão ritmo e variedade à partida.
     if(r()<(evCfg.foulChance||0.09)){
-      const defender=chooseDefenderNearCarrier(state,def,r);
-      const evt={type:'FOUL',team:def,playerId:defender?.id,minute};
+      const defender=chooseDefenderNearCarrier(state,def,r),reason=pickFoulReason(m,'normal');
+      const evt={type:'FOUL',team:def,playerId:defender?.id,minute,reason};
       m.stats.fouls[def]++;m.stoppageWindow=true;logEvent(state,evt);
-      queueVisual(state,evt,()=>{if(state.match!==m||m.finished)return;disciplineAfterFoul(state,def,defender?.id,minute);autoCoachSubs(state,minute,true);});
+      queueVisual(state,evt,()=>{if(state.match!==m||m.finished)return;disciplineAfterFoul(state,def,defender?.id,minute,reason);autoCoachSubs(state,minute,true);});
       return;
     }
     if(r()<(evCfg.throwInChance||0.115)){
@@ -256,12 +267,13 @@
     if(r()<Math.max(.018,turnoverBase-protection)){
       const defender=chooseDefenderNearCarrier(state,def,r);
       const foul=r()<(.10+.08*pressure);
-      const evt={type:foul?'FOUL':'TACKLE',team:def,playerId:defender?.id,minute};
+      const reason=foul?pickFoulReason(m,'normal'):null;
+      const evt={type:foul?'FOUL':'TACKLE',team:def,playerId:defender?.id,minute,reason};
       logEvent(state,evt);
       if(foul){m.stoppageWindow=true;m.stats.fouls[def]++;}
       queueVisual(state,evt,()=>{
         if(!state.match||state.match!==m||m.finished)return;
-        if(foul){disciplineAfterFoul(state,def,defender?.id,minute);autoCoachSubs(state,minute,true);}
+        if(foul){disciplineAfterFoul(state,def,defender?.id,minute,reason);autoCoachSubs(state,minute,true);}
         else{
           m.poss=def;m.carrierId=defender?.id||chooseCarrier(state,def,r)?.id;m.possessionActions=0;m.attackPhase='TRANSITION';m.stats.tackles[def]++;
           if(m.carrierId)Prime.Pitch.setCarrier(def,m.carrierId);
@@ -466,10 +478,12 @@
     else{shotZone=Math.floor(m.rng()*9);diveZone=Math.floor(m.rng()*9);}
     const base=penaltyChance(shooter,gk),same=shotZone===diveZone,near=Math.abs((shotZone%3)-(diveZone%3))<=1&&Math.floor(shotZone/3)===Math.floor(diveZone/3);
     const scoreChance=Math.max(.18,Math.min(.96,base-(same?.47:near?.16:0)));const scored=m.rng()<scoreChance;
-    if(scored)s[pn.team]++;s.kicks.push({team:pn.team,playerId:pn.shooterId,scored,shotZone,diveZone});
-    emit(state,`${state.teams[pn.team].name}: ${playerById(pn.shooterId)?.name||'Jogador'} ${scored?'marca':'não converte'} o pênalti.` ,scored?'goal':'event','PENALTY_KICK',{...pn,scored,shotZone,diveZone});
+    const row=Math.floor(shotZone/3),resultKind=scored?'GOAL':((same||near)?'SAVE':(row===0?'OVER':'WIDE'));
+    if(scored)s[pn.team]++;s.kicks.push({team:pn.team,playerId:pn.shooterId,scored,shotZone,diveZone,resultKind});
+    const resultText=resultKind==='GOAL'?'marca':resultKind==='SAVE'?'tem a cobrança defendida':resultKind==='OVER'?'manda por cima do gol':'manda para fora';
+    emit(state,`${state.teams[pn.team].name}: ${playerById(pn.shooterId)?.name||'Jogador'} ${resultText}.`,scored?'goal':'event','PENALTY_KICK',{...pn,scored,shotZone,diveZone,resultKind});
     const next=()=>{m.pendingPenalty=null;s.index++;requestNextPenalty(state);};
-    if(Prime.Pitch?.playPenalty)Prime.Pitch.playPenalty(pn.team,pn.shooterId,shotZone,diveZone,scored,next);else next();
+    if(Prime.Pitch?.playPenalty)Prime.Pitch.playPenalty(pn.team,pn.shooterId,shotZone,diveZone,scored,next,{resultKind});else next();
     return {ok:true,scored};
   }
   function finishAfterShootout(state){
