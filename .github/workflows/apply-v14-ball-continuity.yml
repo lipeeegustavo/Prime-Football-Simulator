@@ -1,0 +1,111 @@
+name: Apply v14 Ball Continuity
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-v14-ball-continuity.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch kickoff, possession continuity and yellow-card sash
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          # --- match engine: center-circle restart after goals + avoid possession snaps ---
+          p=Path('js/simulation/matchEngine.js')
+          s=p.read_text()
+          old="visualRestart(def,m.carrierId,'kickoff');m.stoppageWindow=true;autoCoachSubs(state,m.minute,true);"
+          new="if(Prime.Pitch?.restartKickoff)Prime.Pitch.restartKickoff(def,m.carrierId);else visualRestart(def,m.carrierId,'kickoff');m.stoppageWindow=true;autoCoachSubs(state,m.minute,true);"
+          if old in s:
+              s=s.replace(old,new,1)
+          else:
+              print('goal kickoff pattern already patched or changed')
+
+          old2="if(m.carrierId)Prime.Pitch.setCarrier(def,m.carrierId);"
+          new2="if(m.carrierId)visualRestart(def,m.carrierId,'tackle');"
+          if old2 in s:
+              s=s.replace(old2,new2,1)
+          else:
+              print('tackle possession pattern already patched or changed')
+
+          old3="Prime.Pitch.setCarrier(def,m.carrierId);"
+          new3="visualRestart(def,m.carrierId,'save');"
+          if old3 in s:
+              s=s.replace(old3,new3,1)
+          else:
+              print('save possession pattern already patched or changed')
+          p.write_text(s)
+
+          # --- renderer: real kickoff restart at midfield ---
+          p=Path('js/render/pitchRenderer.js')
+          s=p.read_text()
+          anchor="  function setTarget(key,id){if(!scene)return;scene.target=findPlayerById(key,id)||null;}\n"
+          if 'function restartKickoff(' not in s:
+              addition="""  function restartKickoff(key,id){
+    if(!scene)return;
+    const p=findPlayerById(key,id);if(!p)return;
+    // Reinício após gol: a bola nasce no centro do campo. Jogada parada,
+    // portanto reposicionar o cobrador aqui não cria teleporte durante bola viva.
+    scene.action=null;scene.target=null;scene.carrier=null;
+    p.x=F.width/2;p.y=F.length/2;p.tx=p.x;p.ty=p.y;p.vx=0;p.vy=0;
+    scene.ball.x=F.width/2;scene.ball.y=F.length/2;scene.ball.z=0;
+    scene.ball.vx=scene.ball.vy=scene.ball.vz=0;scene.ball.state='dead';
+    Prime.Ball.setControlled(scene.ball,p.x,p.y,key,p.index);
+    scene.carrier=p;setAnim(p,'control',.35);
+  }
+"""
+              if anchor not in s: raise SystemExit('renderer anchor not found')
+              s=s.replace(anchor,addition+anchor,1)
+          export_old="celebrate,showRefereeCard,playPenalty,restartToCarrier\n"
+          export_new="celebrate,showRefereeCard,playPenalty,restartToCarrier,restartKickoff\n"
+          if export_old in s and 'restartToCarrier,restartKickoff' not in s:
+              s=s.replace(export_old,export_new,1)
+          p.write_text(s)
+
+          # --- overlay: stronger permanent yellow-card signal ---
+          p=Path('js/render/broadcastOverlay.js')
+          s=p.read_text()
+          old="""    if(p.yellowCards>0){
+      const cw=Math.max(6,r*.38),ch=Math.max(9,r*.58);
+      ctx.save();ctx.translate(c.x+r*.78,bodyY-r*.78);ctx.rotate(.12);ctx.fillStyle='#FFC93C';ctx.fillRect(-cw/2,-ch/2,cw,ch);ctx.restore();
+    }
+"""
+          new="""    if(p.yellowCards>0){
+      // Faixa amarela permanente: visível mesmo com zoom afastado.
+      ctx.save();
+      ctx.strokeStyle='#FFC93C';ctx.lineWidth=Math.max(3,r*.20);
+      ctx.beginPath();ctx.arc(c.x,bodyY,r+4,Math.PI*.10,Math.PI*.90);ctx.stroke();
+      const cw=Math.max(7,r*.42),ch=Math.max(10,r*.62);
+      ctx.translate(c.x+r*.82,bodyY-r*.78);ctx.rotate(.12);ctx.fillStyle='#FFC93C';ctx.fillRect(-cw/2,-ch/2,cw,ch);
+      ctx.strokeStyle='rgba(20,15,0,.75)';ctx.lineWidth=1;ctx.strokeRect(-cw/2,-ch/2,cw,ch);ctx.restore();
+    }
+"""
+          if old in s:
+              s=s.replace(old,new,1)
+          else:
+              print('yellow-card overlay already patched or changed')
+          p.write_text(s)
+          PY
+      - name: Validate JavaScript
+        run: |
+          node --check js/simulation/matchEngine.js
+          node --check js/render/pitchRenderer.js
+          node --check js/render/broadcastOverlay.js
+      - name: Commit production fixes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add js/simulation/matchEngine.js js/render/pitchRenderer.js js/render/broadcastOverlay.js
+          if git diff --cached --quiet; then
+            echo 'No changes to commit'
+          else
+            git commit -m 'fix: v14 kickoff continuity and yellow card markers'
+            git push
+          fi
