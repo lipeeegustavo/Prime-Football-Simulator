@@ -395,7 +395,7 @@
       if(!m.halfEmitted&&m.gameSeconds>=45*60){m.halfEmitted=true;m.gameSeconds=45*60;m.minute=45;m.waitingHalfTime=true;m.paused=true;m.stoppageWindow=true;Prime.GameLoop.setPaused(true);emit(state,"45' — Intervalo.",'event','HALF_TIME');hooks.onEvent&&hooks.onEvent({type:'OVERLAY',data:{kind:'half'}},state);autoCoachSubs(state,45,true);hooks.onHalfTime&&hooks.onHalfTime(state);update(state);return;}
       // Uma nova etapa tática só nasce quando a etapa visual anterior terminou.
       // Isso evita o efeito de ping-pong e mantém a jogada legível no campo.
-      if(m.gameSeconds>=m.nextEventAt&&m.gameSeconds<TOTAL&&!m.visualBusy&&!m.visualQueue.length){
+      if(m.gameSeconds>=m.nextEventAt&&m.gameSeconds<TOTAL&&!m.visualBusy&&!m.visualQueue.length&&!(Prime.Pitch?.isActionActive?.())){
         generateEvent(state);
         const tempo=(tactics(state,m.poss).tempo||65);
         const base=Math.max(Prime.Balance?.event?.baseGapMin||34,(Prime.Balance?.event?.baseGapMax||64)-tempo*.22);
