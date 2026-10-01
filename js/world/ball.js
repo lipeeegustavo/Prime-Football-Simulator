@@ -117,6 +117,7 @@
     if(!ball||dt<=0)return;
     dt=Math.min(.05,dt);
     if(ball.returnDelay>0)ball.returnDelay=Math.max(0,ball.returnDelay-dt);
+    if(Prime.PhysicsBridge&&Prime.PhysicsBridge.isReady&&Prime.PhysicsBridge.isReady()){Prime.PhysicsBridge.step(ball,dt);return;}
 
     if(ball.state==='controlled'&&ball.targetX!=null&&ball.targetY!=null){
       controlledUpdate(ball,dt);

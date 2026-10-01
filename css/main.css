@@ -115,3 +115,7 @@ h1,h2,h3,p{margin-top:0}
 .match-overlay.card-yellow .overlay-card{color:#FFD43B;font-size:clamp(1.7rem,6vw,4.2rem);letter-spacing:-.035em}
 .match-overlay.card-red .overlay-card{color:#FF5A5F;font-size:clamp(1.7rem,6vw,4.2rem);letter-spacing:-.035em}
 .match-overlay.penalty-miss .overlay-card{color:#F3F6FB;font-size:clamp(1.6rem,5.5vw,3.8rem);letter-spacing:-.035em}
+
+
+/* v7-broadcast-horizontal */
+.match-page{max-width:1600px;margin:0 auto}.match-grid{display:block!important}.stadium-card{padding:5px;background:#07160D;border-radius:14px}.pitch-stage{width:100%;aspect-ratio:16/9;min-height:0!important;max-height:none!important;overflow:hidden}.pitch-canvas{width:100%!important;height:100%!important;min-height:0!important;display:block}.scoreboard{border-radius:12px;padding:8px 14px}.narration-drawer{position:absolute;right:10px;top:52px;bottom:10px;width:min(360px,35vw);z-index:10;transform:translateX(calc(100% + 18px));transition:.22s ease;pointer-events:none}.narration-drawer.open{transform:translateX(0);pointer-events:auto}@media(max-width:700px){.pitch-stage{aspect-ratio:16/10;min-height:0!important}.pitch-canvas{height:100%!important;min-height:0!important}.narration-drawer{left:8px;right:8px;top:auto;bottom:8px;width:auto;height:min(50svh,400px);transform:translateY(calc(100% + 18px))}.narration-drawer.open{transform:translateY(0)}}

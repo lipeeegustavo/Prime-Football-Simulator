@@ -92,33 +92,24 @@
   function getCameraMode(){return scene?.camera?.mode||'follow';}
   function visualAttacksTop(key){return (key==='A')!==Boolean(scene?.state?.match?.secondHalf);}
 
+  // Broadcast horizontal: comprimento do campo no eixo X da tela.
   function cameraWorldToCanvas(s,x,y){
-    const c=s.camera,canvas=s.canvas;
-    if(c.mode==='full')return fullWorldToCanvas(s,x,y);
+    const c=s.camera,canvas=s.canvas;if(c.mode==='full')return fullWorldToCanvas(s,x,y);
     const margin=18*Math.min(2,window.devicePixelRatio||1),usableW=canvas.width-margin*2,usableH=canvas.height-margin*2;
-    const fullScale=Math.min(usableW/F.width,usableH/(F.length+F.goalDepth*2));
-    const scale=fullScale*c.zoom;
-    return {x:canvas.width/2+(x-c.x)*scale,y:canvas.height/2+(y-c.y)*scale,scale};
+    const fullScale=Math.min(usableW/(F.length+F.goalDepth*2),usableH/F.width),scale=fullScale*c.zoom;
+    return {x:canvas.width/2+(y-c.y)*scale,y:canvas.height/2+(x-c.x)*scale,scale};
   }
   function fullWorldToCanvas(s,x,y){
     const canvas=s.canvas,margin=18*Math.min(2,window.devicePixelRatio||1),totalLen=F.length+F.goalDepth*2;
-    const scale=Math.min((canvas.width-margin*2)/F.width,(canvas.height-margin*2)/totalLen);
-    const drawW=F.width*scale,drawH=totalLen*scale,ox=(canvas.width-drawW)/2,oy=(canvas.height-drawH)/2;
-    return {x:ox+x*scale,y:oy+(y+F.goalDepth)*scale,scale};
+    const scale=Math.min((canvas.width-margin*2)/totalLen,(canvas.height-margin*2)/F.width),drawW=totalLen*scale,drawH=F.width*scale,ox=(canvas.width-drawW)/2,oy=(canvas.height-drawH)/2;
+    return {x:ox+(y+F.goalDepth)*scale,y:oy+x*scale,scale};
   }
   function updateCamera(s,dt){
     const c=s.camera;if(c.mode==='full'){c.x=F.width/2;c.y=F.length/2;return;}
-    const focus=s.ball||s.carrier||{x:F.width/2,y:F.length/2};
-    const poss=s.state?.match?.poss||s.carrier?.key||'A';
-    const dir=visualAttacksTop(poss)?-1:1;
-    const look=B.camera?.lookAhead||5.5;
-    c.targetX=focus.x;
-    c.targetY=focus.y+dir*look;
-    const smooth=1-Math.exp(-(B.camera?.smoothing||4.6)*Math.max(0,dt));
-    c.x+=(c.targetX-c.x)*smooth;c.y+=(c.targetY-c.y)*smooth;
-    const aspect=s.canvas.width/s.canvas.height,baseViewW=F.width/(c.zoom||2),baseViewH=baseViewW/aspect;
-    c.x=Math.max(baseViewW*.46,Math.min(F.width-baseViewW*.46,c.x));
-    c.y=Math.max(baseViewH*.46-F.goalDepth,Math.min(F.length+F.goalDepth-baseViewH*.46,c.y));
+    const focus=s.ball||s.carrier||{x:F.width/2,y:F.length/2},poss=s.state?.match?.poss||s.carrier?.key||'A',dir=visualAttacksTop(poss)?-1:1;
+    c.targetX=focus.x;c.targetY=focus.y+dir*(B.camera?.lookAhead||5.5);const smooth=1-Math.exp(-(B.camera?.smoothing||4.6)*Math.max(0,dt));c.x+=(c.targetX-c.x)*smooth;c.y+=(c.targetY-c.y)*smooth;
+    const margin=18*Math.min(2,window.devicePixelRatio||1),usableW=s.canvas.width-margin*2,usableH=s.canvas.height-margin*2,fullScale=Math.min(usableW/(F.length+F.goalDepth*2),usableH/F.width),scale=fullScale*(c.zoom||2.05),halfLateral=Math.min(F.width/2,usableH/(2*scale)),halfLength=Math.min((F.length+F.goalDepth*2)/2,usableW/(2*scale));
+    c.x=Math.max(halfLateral,Math.min(F.width-halfLateral,c.x));c.y=Math.max(-F.goalDepth+halfLength,Math.min(F.length+F.goalDepth-halfLength,c.y));
   }
 
   function pathField(ctx,s){
@@ -210,9 +201,8 @@
     if(!s.ball)return;const b=s.ball,c=cameraWorldToCanvas(s,b.x,b.y),r=Math.max(4,Math.min(8,0.54*c.scale)),heightPx=Math.min(r*4,(b.z||0)*c.scale*.42),ctx=s.ctx;ctx.save();ctx.fillStyle='rgba(0,0,0,.28)';ctx.beginPath();ctx.ellipse(c.x+2,c.y+3,r*.95,r*.48,0,0,Math.PI*2);ctx.fill();const by=c.y-heightPx;ctx.translate(c.x,by);ctx.rotate(b.rotation||0);ctx.fillStyle='#FFFFFF';ctx.strokeStyle='#D9E2DC';ctx.lineWidth=1;ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.strokeStyle='#152018';ctx.lineWidth=Math.max(1,r*.18);ctx.beginPath();ctx.moveTo(-r*.65,0);ctx.lineTo(r*.65,0);ctx.moveTo(0,-r*.65);ctx.lineTo(0,r*.65);ctx.stroke();ctx.fillStyle='#152018';ctx.beginPath();ctx.arc(0,0,r*.26,0,Math.PI*2);ctx.fill();ctx.restore();
   }
   function drawMiniMap(s){
-    if(s.preview)return;const ctx=s.ctx,w=Math.max(88,Math.min(132,s.canvas.width*.15)),h=w*1.5,x=s.canvas.width-w-12,y=s.canvas.height-h-12;ctx.save();ctx.fillStyle='rgba(5,18,10,.80)';ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=1;ctx.fillRect(x,y,w,h);ctx.strokeRect(x,y,w,h);ctx.beginPath();ctx.moveTo(x,y+h/2);ctx.lineTo(x+w,y+h/2);ctx.stroke();ctx.beginPath();ctx.arc(x+w/2,y+h/2,w*.13,0,Math.PI*2);ctx.stroke();for(const p of s.players){ctx.fillStyle=teamColor(p.key);ctx.beginPath();ctx.arc(x+(p.x/F.width)*w,y+(p.y/F.length)*h,2.4,0,Math.PI*2);ctx.fill();}ctx.fillStyle='#FFC93C';ctx.beginPath();ctx.arc(x+(s.ball.x/F.width)*w,y+(s.ball.y/F.length)*h,2.2,0,Math.PI*2);ctx.fill();ctx.restore();
+    if(s.preview)return;const ctx=s.ctx,w=Math.min(190,s.canvas.width*.22),h=w*(F.width/F.length),x=(s.canvas.width-w)/2,y=s.canvas.height-h-12;ctx.save();ctx.fillStyle='rgba(5,20,10,.82)';roundRect(ctx,x,y,w,h,10);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.36)';ctx.stroke();const pad=8,fx=x+pad,fy=y+pad,fw=w-pad*2,fh=h-pad*2;ctx.strokeStyle='rgba(255,255,255,.7)';ctx.strokeRect(fx,fy,fw,fh);ctx.beginPath();ctx.moveTo(fx+fw/2,fy);ctx.lineTo(fx+fw/2,fy+fh);ctx.stroke();for(const pl of s.players){const px=fx+pl.y/F.length*fw,py=fy+pl.x/F.width*fh;ctx.fillStyle=pl.key==='A'?'#3B82F6':'#FF6B35';ctx.beginPath();ctx.arc(px,py,2.8,0,Math.PI*2);ctx.fill();}ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(fx+s.ball.y/F.length*fw,fy+s.ball.x/F.width*fh,2.5,0,Math.PI*2);ctx.fill();ctx.restore();
   }
-
   function draw(s){if(!s||!s.ctx)return;drawField(s);drawArrow(s);for(const p of s.players)drawPlayerCircle(s,p);drawReferee(s);drawBall(s);drawMiniMap(s);}
 
   function kickToPlayer(teamKey,playerId,speed,state,options){
