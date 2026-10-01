@@ -1,0 +1,37 @@
+name: Apply Prime v20 live and stoppage
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-prime-v20.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply v20 patch
+        run: node tools/apply-v20.js
+      - name: Validate JavaScript
+        run: |
+          find js -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Commit production changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html js css
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "feat: v20 live spectators predictions set pieces and stoppage time"
+          git push origin HEAD:main
