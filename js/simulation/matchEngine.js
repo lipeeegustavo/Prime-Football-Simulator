@@ -459,7 +459,7 @@
   }
   function startSecondHalf(state){
     const m=state.match;if(!m||!m.waitingHalfTime)return {ok:false,error:'A partida não está no intervalo.'};
-    flushVisuals(state);m.waitingHalfTime=false;m.secondHalf=true;m.paused=false;m.stoppageWindow=false;m.attackPhase='KICKOFF';m.gameSeconds=FIRST_HALF_BASE;m.minute=45;m.secondHalfStoppageAnnounced=false;
+    flushVisuals(state);m.waitingHalfTime=false;m.secondHalf=true;m.paused=false;m.stoppageWindow=false;m.attackPhase='KICKOFF';m.gameSeconds=FIRST_HALF_BASE;m.minute=45;m.secondHalfStoppageAnnounced=false;m.nextEventAt=FIRST_HALF_BASE+12+m.rng()*10;
     refreshPitch(state);const key='B',carrier=chooseCarrier(state,key,m.rng);m.poss=key;m.carrierId=carrier?.id||null;if(m.carrierId)visualRestart(key,m.carrierId,'kickoff');
     emit(state,"46' — começa o segundo tempo. Os times trocaram de lado.",'event','SECOND_HALF');Prime.GameLoop.setPaused(false);update(state);return {ok:true};
   }

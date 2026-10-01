@@ -22,7 +22,7 @@
   function storeSession(s){liveSession=s;try{sessionStorage.setItem('prime_live_host_v20',JSON.stringify(s));}catch(_e){}}
   function viewerId(){
     let id='';try{id=localStorage.getItem('prime_viewer_id_v20')||'';}catch(_e){}
-    if(!id){id=(crypto.randomUUID?crypto.randomUUID():`viewer-${Date.now()}-${Math.floor(Math.random()*1e9)}`);try{localStorage.setItem('prime_viewer_id_v20',id);}catch(_e){}}
+    if(!id){if(crypto.randomUUID)id=crypto.randomUUID();else{const b=crypto.getRandomValues(new Uint32Array(4));id=`viewer-${Array.from(b).map(x=>x.toString(16)).join('')}`;}try{localStorage.setItem('prime_viewer_id_v20',id);}catch(_e){}}
     return id;
   }
 
