@@ -1,0 +1,74 @@
+name: Apply v21 physical restarts retry
+
+on: push
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, 'physical ball exit before restart') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Patch engine
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('js/simulation/matchEngine.js')
+          s = p.read_text()
+          old = """    if(r()<(evCfg.throwInChance||0.115)){
+      const restartTeam=r()<.72?atk:def;
+      m.stats.throwIns[restartTeam]++;m.stoppageWindow=true;logEvent(state,{type:'THROW_IN',team:restartTeam,minute});
+      queueVisual(state,{type:'THROW_IN',team:restartTeam,minute},()=>{if(state.match!==m||m.finished)return;m.poss=restartTeam;const c=chooseCarrier(state,restartTeam,r);m.carrierId=c?.id||null;m.possessionActions=0;if(c)visualRestart(restartTeam,c.id,'throw-in');autoCoachSubs(state,minute,true);});
+      return;
+    }
+    if(phase==='FINAL_THIRD'&&r()<(evCfg.cornerChanceFinalThird||0.055)){
+      m.stats.corners[atk]++;m.stoppageWindow=true;logEvent(state,{type:'CORNER',team:atk,minute});
+      queueVisual(state,{type:'CORNER',team:atk,minute},()=>{if(state.match!==m||m.finished)return;const c=chooseCarrier(state,atk,r);m.poss=atk;m.carrierId=c?.id||null;m.possessionActions=Math.max(2,m.possessionActions);if(c)visualRestart(atk,c.id,'corner');autoCoachSubs(state,minute,true);});
+      return;
+    }
+"""
+          new = """    if(r()<(evCfg.throwInChance||0.115)){
+      const restartTeam=r()<.72?atk:def,lastTouchTeam=restartTeam===atk?def:atk;
+      queueVisual(state,{type:'OUT_TOUCHLINE',team:restartTeam,lastTouchTeam,playerId:carrier.id,minute},(outRes)=>{
+        if(state.match!==m||m.finished||!outRes?.outOfPlay)return;
+        m.stats.throwIns[restartTeam]++;m.stoppageWindow=true;logEvent(state,{type:'THROW_IN',team:restartTeam,minute});
+        queueVisual(state,{type:'THROW_IN',team:restartTeam,minute,side:outRes.side,outY:outRes.y},(restartRes)=>{
+          if(state.match!==m||m.finished)return;
+          m.poss=restartTeam;const preferred=restartRes?.receiverId?playerById(restartRes.receiverId):null,c=preferred||chooseCarrier(state,restartTeam,r);
+          m.carrierId=c?.id||restartRes?.receiverId||null;m.possessionActions=0;m.attackPhase='BUILDUP';if(m.carrierId)Prime.Pitch.setCarrier(restartTeam,m.carrierId);autoCoachSubs(state,minute,true);
+        });
+      });
+      return;
+    }
+    if(phase==='FINAL_THIRD'&&r()<(evCfg.cornerChanceFinalThird||0.055)){
+      queueVisual(state,{type:'OUT_GOAL_LINE',team:atk,lastTouchTeam:def,playerId:carrier.id,minute},(outRes)=>{
+        if(state.match!==m||m.finished||!outRes?.outOfPlay)return;
+        m.stats.corners[atk]++;m.stoppageWindow=true;logEvent(state,{type:'CORNER',team:atk,minute});
+        queueVisual(state,{type:'CORNER',team:atk,minute,side:outRes.side},(restartRes)=>{
+          if(state.match!==m||m.finished)return;
+          m.poss=atk;const preferred=restartRes?.receiverId?playerById(restartRes.receiverId):null,c=preferred||chooseCarrier(state,atk,r);
+          m.carrierId=c?.id||restartRes?.receiverId||null;m.possessionActions=Math.max(2,m.possessionActions);m.attackPhase='FINAL_THIRD';if(m.carrierId)Prime.Pitch.setCarrier(atk,m.carrierId);autoCoachSubs(state,minute,true);
+        });
+      });
+      return;
+    }
+"""
+          if old not in s:
+              raise SystemExit('target block not found')
+          p.write_text(s.replace(old, new))
+          PY
+      - name: Validate
+        run: find js -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Commit
+        run: |
+          git config user.name "Prime Football Bot"
+          git config user.email "actions@github.com"
+          git add js/simulation/matchEngine.js
+          git commit -m "fix: require physical ball exit before restart"
+          git push
