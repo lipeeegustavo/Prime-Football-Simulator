@@ -24,14 +24,25 @@
     overflow:visible!important;
     transform-style:preserve-3d!important;
   }
-  body:has(.match-page) .pitch-canvas{
+  body:has(.match-page) .pitch-canvas,
+  body:has(.match-page) .pitch-3d-overlay{
     width:100%!important;
     height:100%!important;
     border-radius:14px!important;
     transform-origin:50% 94%!important;
     transform:perspective(1550px) rotateX(10deg) scale(.985)!important;
+  }
+  body:has(.match-page) .pitch-canvas{
     box-shadow:0 28px 54px rgba(0,0,0,.36),inset 0 0 40px rgba(0,0,0,.14)!important;
   }
+}
+
+.pitch-3d-overlay{
+  position:absolute;
+  inset:0;
+  z-index:4;
+  pointer-events:none;
+  background:transparent;
 }
 
 /* Remove as duas traves falsas em CSS: os únicos gols passam a ser os desenhados no Canvas. */
@@ -39,6 +50,7 @@
 
 /* HUD compacto sobre o campo. */
 .camera-controls{
+  z-index:8!important;
   background:rgba(5,18,11,.78)!important;
   border:1px solid rgba(255,255,255,.13)!important;
   border-radius:12px!important;
@@ -54,7 +66,8 @@ body:has(.match-page) .stadium-card{isolation:isolate}
 @media (max-width:700px){
   body:has(.match-page) .stadium-card{padding:4px!important;overflow:visible!important;perspective:950px!important}
   body:has(.match-page) .pitch-stage{aspect-ratio:16/11!important;min-height:250px!important;max-height:none!important}
-  body:has(.match-page) .pitch-canvas{
+  body:has(.match-page) .pitch-canvas,
+  body:has(.match-page) .pitch-3d-overlay{
     transform-origin:50% 92%!important;
     transform:perspective(980px) rotateX(7deg) scale(.985)!important;
     border-radius:13px!important;
