@@ -1,0 +1,62 @@
+/* Prime Football Simulator — v13 broadcast / 2.5D presentation */
+
+/* Desktop: campo ocupa o palco principal inteiro. */
+@media (min-width:701px){
+  body:has(.match-page) .app-shell{max-width:1720px;padding-left:18px;padding-right:18px}
+  body:has(.match-page) .match-page{gap:10px}
+  body:has(.match-page) .match-grid{grid-template-columns:minmax(0,1fr)!important}
+  body:has(.match-page) .stadium-card{
+    padding:8px 10px 10px!important;
+    overflow:visible!important;
+    border-radius:18px!important;
+    background:
+      radial-gradient(ellipse at 50% 0%,rgba(255,255,255,.06),transparent 34%),
+      linear-gradient(180deg,#08190f 0%,#041109 100%)!important;
+    perspective:1500px!important;
+    perspective-origin:50% 28%!important;
+  }
+  body:has(.match-page) .pitch-stage{
+    width:100%!important;
+    height:min(73vh,760px)!important;
+    min-height:560px!important;
+    max-height:none!important;
+    aspect-ratio:auto!important;
+    overflow:visible!important;
+    transform-style:preserve-3d!important;
+  }
+  body:has(.match-page) .pitch-canvas{
+    width:100%!important;
+    height:100%!important;
+    border-radius:14px!important;
+    transform-origin:50% 94%!important;
+    transform:perspective(1550px) rotateX(10deg) scale(.985)!important;
+    box-shadow:0 28px 54px rgba(0,0,0,.36),inset 0 0 40px rgba(0,0,0,.14)!important;
+  }
+}
+
+/* Remove as duas traves falsas em CSS: os únicos gols passam a ser os desenhados no Canvas. */
+.pitch-stage::before,.pitch-stage::after{display:none!important;content:none!important}
+
+/* HUD compacto sobre o campo. */
+.camera-controls{
+  background:rgba(5,18,11,.78)!important;
+  border:1px solid rgba(255,255,255,.13)!important;
+  border-radius:12px!important;
+  padding:4px!important;
+  box-shadow:0 10px 26px rgba(0,0,0,.28)!important;
+}
+.camera-btn{border-radius:9px!important}
+
+/* O minimapa fica integrado ao palco e não compete com a jogada. */
+body:has(.match-page) .stadium-card{isolation:isolate}
+
+/* Mobile: mesma leitura inclinada, sem sacrificar área útil. */
+@media (max-width:700px){
+  body:has(.match-page) .stadium-card{padding:4px!important;overflow:visible!important;perspective:950px!important}
+  body:has(.match-page) .pitch-stage{aspect-ratio:16/11!important;min-height:250px!important;max-height:none!important}
+  body:has(.match-page) .pitch-canvas{
+    transform-origin:50% 92%!important;
+    transform:perspective(980px) rotateX(7deg) scale(.985)!important;
+    border-radius:13px!important;
+  }
+}
