@@ -212,6 +212,9 @@
     if(!evt)return;if(evt.type==='OVERLAY'){if(evt.data?.kind==='half')showOverlay('INTERVALO','',1500);return;}
     const list=$('#feedList');if(list&&evt.text){const item=document.createElement('div');item.className=`feed-event ${evt.type==='GOAL'?'goal':evt.type==='RED_CARD'?'danger':''}`;item.innerHTML=`<span class="feed-minute">${evt.minute}'</span><span class="feed-icon">${eventIcon(evt.type)}</span><span>${esc(evt.text.replace(/^\d+'\s—\s/,''))}</span>`;list.prepend(item);while(list.children.length>45)list.lastElementChild.remove();}
     if(evt.type==='GOAL')showOverlay('GOL!','goal',1500);if(evt.type==='HALF_TIME')showOverlay('INTERVALO','',1400);
+    if(evt.type==='YELLOW_CARD'){const p=Squad.playerById(evt.data?.playerId);showOverlay(`🟨 AMARELO${p?' · '+Squad.surname(p.name):''}`,'card-yellow',1800);}
+    if(evt.type==='RED_CARD'){const p=Squad.playerById(evt.data?.playerId);showOverlay(`🟥 VERMELHO${p?' · '+Squad.surname(p.name):''}`,'card-red',2100);}
+    if(evt.type==='PENALTY_KICK')showOverlay(evt.data?.scored?'⚽ GOL NO PÊNALTI':'🧤 PÊNALTI PERDIDO',evt.data?.scored?'goal':'penalty-miss',1500);
   }
   function updateMatchHud(){
     const m=state.match;if(!m)return;

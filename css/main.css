@@ -109,3 +109,9 @@ h1,h2,h3,p{margin-top:0}
 }
 .history-row{display:grid;grid-template-columns:28px 1fr auto;gap:8px;align-items:center;padding:6px 0;border-top:1px solid rgba(43,74,56,.55)}.history-row:first-of-type{border-top:0}.history-row span,.history-row small{color:var(--text-soft);font-size:.65rem}.history-row strong{font-size:.74rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .challenge-badge,.challenge-result{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:7px 10px;font-size:.72rem;font-weight:900}.challenge-badge{margin-top:8px;background:rgba(255,201,60,.1);border:1px solid rgba(255,201,60,.42);color:var(--gold)}.challenge-result{margin:0 auto 12px;border:1px solid var(--line)}.challenge-result.success{background:rgba(182,242,58,.1);color:var(--accent);border-color:rgba(182,242,58,.42)}.challenge-result.fail{background:rgba(255,90,95,.08);color:#ffb5b8;border-color:rgba(255,90,95,.38)}
+
+
+/* v6.1 — feedback visual da partida */
+.match-overlay.card-yellow .overlay-card{color:#FFD43B;font-size:clamp(1.7rem,6vw,4.2rem);letter-spacing:-.035em}
+.match-overlay.card-red .overlay-card{color:#FF5A5F;font-size:clamp(1.7rem,6vw,4.2rem);letter-spacing:-.035em}
+.match-overlay.penalty-miss .overlay-card{color:#F3F6FB;font-size:clamp(1.6rem,5.5vw,3.8rem);letter-spacing:-.035em}
