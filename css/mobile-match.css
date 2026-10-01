@@ -1,6 +1,6 @@
-/* Prime Football Simulator — mobile match polish v10 */
+/* Prime Football Simulator — professional mobile match UI v11 */
 
-/* Broadcast depth: keep the existing canvas engine, but give the stage visual perspective. */
+/* Desktop keeps the broadcast presentation and subtle pitch depth. */
 .stadium-card{
   perspective:1400px;
   perspective-origin:50% 38%;
@@ -19,7 +19,6 @@
   box-shadow:inset 0 0 44px rgba(0,0,0,.13);
 }
 
-/* Goal frames are only shown in full-field camera, so they do not float on top of follow camera. */
 .pitch-stage:has([data-camera="full"].active)::before,
 .pitch-stage:has([data-camera="full"].active)::after{
   content:"";
@@ -49,121 +48,290 @@
   transform-origin:left center;
 }
 
-/* Better overlay/readability without hiding the play. */
-.camera-controls{backdrop-filter:blur(8px)}
-.narration-drawer{background:rgba(8,28,17,.96);backdrop-filter:blur(18px)}
+.camera-controls{backdrop-filter:blur(10px)}
+.narration-drawer{background:rgba(8,28,17,.97);backdrop-filter:blur(20px)}
 
 @media(max-width:700px){
+  :root{--mobile-gap:10px;--mobile-radius:18px}
   html,body{overflow-x:hidden}
+  body:has(.match-page){background:#07160d}
+
+  /* App chrome: compact and visually centered. */
   body:has(.match-page) .topbar{
-    height:54px;
-    padding:max(6px,env(safe-area-inset-top)) 10px 6px;
+    height:52px;
+    min-height:52px;
+    padding:6px 14px;
+    padding-top:max(6px,env(safe-area-inset-top));
     position:sticky;
+    top:0;
+    z-index:80;
+    background:rgba(7,22,13,.96);
+    border-bottom:1px solid rgba(182,242,58,.12);
+    box-shadow:0 8px 24px rgba(0,0,0,.16);
   }
-  body:has(.match-page) .brand{gap:7px}
-  body:has(.match-page) .brand-mark{width:32px;height:32px;border-radius:9px;font-size:1rem}
-  body:has(.match-page) .brand strong{font-size:.82rem}
+  body:has(.match-page) .brand{gap:8px;min-width:0}
+  body:has(.match-page) .brand-mark{width:34px;height:34px;border-radius:10px;font-size:1.04rem;box-shadow:none}
+  body:has(.match-page) .brand strong{font-size:.92rem;letter-spacing:-.015em}
   body:has(.match-page) .brand small{display:none}
   body:has(.match-page) .seed-chip{display:none!important}
-  body:has(.match-page) #homeBtn{min-height:34px;padding:6px 9px;font-size:.72rem}
+  body:has(.match-page) #homeBtn{min-height:34px;padding:6px 10px;font-size:.7rem;border-radius:10px}
 
-  body:has(.match-page) .progress-shell{padding:5px 8px 0}
-  body:has(.match-page) .stepper{gap:3px}
-  body:has(.match-page) .step{font-size:0;gap:0}
-  body:has(.match-page) .step::before{height:3px}
-  body:has(.match-page) .app-shell{padding:7px 6px calc(18px + env(safe-area-inset-bottom));width:100%;max-width:none}
-  .match-page{gap:7px;width:100%}
-
-  .scoreboard{
-    min-height:66px;
-    grid-template-columns:minmax(0,1fr) 92px minmax(0,1fr);
-    padding:7px 9px;
-    border-radius:13px;
-    gap:5px;
-  }
-  .score-team{gap:5px}.score-team-name{font-size:.72rem}.team-dot{width:9px;height:9px}
-  .score-value{font-size:1.42rem}.match-clock{font-size:.72rem}.half-label{font-size:.52rem}
-
-  .stadium-card{padding:3px;border-radius:12px;overflow:visible}
-  .pitch-stage{
-    aspect-ratio:16/9!important;
+  /* The stepper is useful during setup, not while watching the match. */
+  body:has(.match-page) .progress-shell{display:none!important}
+  body:has(.match-page) .app-shell{
     width:100%;
+    max-width:none;
+    margin:0;
+    padding:10px 10px calc(22px + env(safe-area-inset-bottom));
+  }
+  .match-page{width:100%;max-width:100%;gap:10px;margin:0 auto}
+
+  /* Compact broadcast scoreboard. */
+  .scoreboard{
+    min-height:82px;
+    width:100%;
+    grid-template-columns:minmax(0,1fr) 104px minmax(0,1fr);
+    gap:8px;
+    padding:10px 12px;
+    border-radius:20px;
+    border:1px solid rgba(82,127,96,.52);
+    background:linear-gradient(180deg,rgba(16,43,27,.98),rgba(10,31,20,.98));
+    box-shadow:0 10px 30px rgba(0,0,0,.2),inset 0 1px rgba(255,255,255,.025);
+  }
+  .score-team{gap:8px;min-width:0;align-items:center}
+  .score-team.b{justify-content:flex-end}
+  .score-team-name{font-size:.78rem;line-height:1.1;font-weight:900}
+  .team-dot{width:10px;height:10px;box-shadow:0 0 0 3px rgba(255,255,255,.035)}
+  .score-center{display:grid;justify-items:center;gap:1px}
+  .score-value{font-size:1.75rem;line-height:.95;letter-spacing:-.055em}
+  .match-clock{font-size:.82rem;line-height:1;color:var(--gold)}
+  .half-label{font-size:.54rem;line-height:1.1;letter-spacing:.12em}
+
+  /* Pitch becomes the hero card. */
+  .stadium-card{
+    padding:6px;
+    overflow:visible;
+    border-radius:20px;
+    border:1px solid rgba(74,120,89,.62);
+    background:linear-gradient(180deg,#092318,#07170f);
+    box-shadow:0 16px 42px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.025);
+  }
+  .pitch-stage{
+    width:100%;
+    aspect-ratio:16/10!important;
     min-height:0!important;
-    border-radius:10px;
+    max-height:none!important;
+    border-radius:16px;
+    overflow:visible;
+    filter:drop-shadow(0 10px 20px rgba(0,0,0,.2));
   }
-  .pitch-canvas{border-radius:10px;transform:perspective(1000px) rotateX(1.5deg)}
+  .pitch-canvas{
+    width:100%!important;
+    height:100%!important;
+    min-height:0!important;
+    display:block;
+    border-radius:15px;
+    border:1px solid rgba(255,255,255,.18);
+    transform:perspective(1000px) rotateX(1.2deg);
+  }
   .pitch-stage:has([data-camera="full"].active)::before,
-  .pitch-stage:has([data-camera="full"].active)::after{border-width:2px;width:4.2%;height:25%;top:37.5%}
-  .pitch-stage:has([data-camera="full"].active)::before{left:-2%}
-  .pitch-stage:has([data-camera="full"].active)::after{right:-2%}
+  .pitch-stage:has([data-camera="full"].active)::after{
+    border-width:2px;
+    width:4%;
+    height:24%;
+    top:38%;
+    opacity:.92;
+  }
+  .pitch-stage:has([data-camera="full"].active)::before{left:-1.85%}
+  .pitch-stage:has([data-camera="full"].active)::after{right:-1.85%}
 
+  /* Camera controls: compact floating toolbar, centered. */
   .camera-controls{
-    right:6px;
-    top:6px;
+    left:50%;
+    right:auto;
+    top:8px;
+    transform:translateX(-50%);
+    display:flex;
+    align-items:center;
+    justify-content:center;
     gap:4px;
-    padding:3px;
-    border-radius:10px;
-    background:rgba(5,20,10,.52);
+    padding:4px;
+    max-width:calc(100% - 16px);
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:13px;
+    background:rgba(5,22,12,.78);
+    box-shadow:0 8px 20px rgba(0,0,0,.22);
   }
-  .camera-btn{min-height:30px!important;padding:5px 7px!important;font-size:.62rem!important;border-radius:7px!important}
-
-  /* Narration becomes a real bottom sheet. It no longer replaces/covers the pitch by default. */
-  .narration-drawer{
-    position:fixed!important;
-    left:7px!important;
-    right:7px!important;
-    bottom:calc(8px + env(safe-area-inset-bottom))!important;
-    top:auto!important;
-    width:auto!important;
-    height:min(52svh,420px)!important;
-    z-index:120!important;
-    border:1px solid var(--line);
-    border-radius:18px!important;
-    box-shadow:0 -12px 50px rgba(0,0,0,.46);
-    transform:translateY(calc(100% + 30px))!important;
-    pointer-events:none!important;
+  .camera-btn{
+    min-height:32px!important;
+    padding:6px 9px!important;
+    border-radius:9px!important;
+    font-size:.64rem!important;
+    font-weight:900!important;
+    white-space:nowrap;
   }
-  .narration-drawer.open{transform:translateY(0)!important;pointer-events:auto!important}
-  .narration-head{position:sticky;top:0;background:rgba(8,28,17,.98);z-index:2;padding:11px 12px!important}
-  .narration-head h3{font-size:.9rem;margin:0}
-  .feed-list{padding:0 8px 10px!important;overflow:auto!important;-webkit-overflow-scrolling:touch}
-  .feed-event{grid-template-columns:34px 27px 1fr!important;gap:5px!important;padding:8px 7px!important;font-size:.75rem!important}
-  .feed-minute{font-size:.72rem!important}
+  .camera-btn.active{box-shadow:0 4px 14px rgba(182,242,58,.12)}
 
+  /* Controls: one compact command deck. */
   .match-controls{
     display:grid!important;
     grid-template-columns:1fr 1fr;
-    gap:7px!important;
-    padding:7px!important;
-    margin-top:7px!important;
-    border:1px solid var(--line);
-    border-radius:14px;
-    background:rgba(13,36,23,.86);
+    grid-template-areas:
+      "pause sub"
+      "speed speed"
+      "restart restart";
+    gap:8px!important;
+    margin-top:10px!important;
+    padding:10px!important;
+    border:1px solid rgba(74,120,89,.52);
+    border-radius:18px;
+    background:linear-gradient(180deg,rgba(14,40,25,.95),rgba(8,28,17,.95));
+    box-shadow:inset 0 1px rgba(255,255,255,.025);
   }
-  .match-controls>.btn{width:100%;min-height:43px;padding:8px 9px;font-size:.78rem;border-radius:10px}
-  .match-controls>.segmented{grid-column:1/-1;display:grid!important;grid-template-columns:repeat(3,1fr);width:100%;order:3}
-  .match-controls>.segmented button{min-height:39px;font-size:.8rem;padding:6px}
-  #pauseBtn{grid-column:1/2;order:1}
-  #subBtn{grid-column:2/3;order:2}
-  #restartBtn{grid-column:1/-1;order:4;min-height:38px!important;background:transparent}
+  .match-controls>.btn{
+    width:100%;
+    min-height:48px;
+    padding:9px 10px;
+    border-radius:13px;
+    font-size:.8rem;
+    font-weight:900;
+  }
+  #pauseBtn{grid-area:pause}
+  #subBtn{grid-area:sub}
+  #restartBtn{grid-area:restart;min-height:38px!important;background:rgba(255,255,255,.015);font-size:.74rem}
+  .match-controls>.segmented{
+    grid-area:speed;
+    display:grid!important;
+    grid-template-columns:repeat(3,1fr);
+    width:100%;
+    gap:4px;
+    padding:4px;
+    border:1px solid rgba(76,121,91,.46);
+    border-radius:13px;
+    background:rgba(5,21,12,.55);
+  }
+  .match-controls>.segmented button{
+    min-height:40px;
+    padding:5px;
+    border-radius:9px;
+    font-size:.82rem;
+    font-weight:950;
+  }
 
-  .stat-strip{display:grid!important;grid-template-columns:repeat(3,1fr);gap:6px!important;margin-top:7px!important}
-  .mini-stat{padding:8px 4px!important;min-height:58px;border-radius:12px!important}
-  .mini-stat strong{font-size:.85rem!important}.mini-stat small{font-size:.62rem!important}
+  /* Stats become a slim, balanced strip. */
+  .stat-strip{
+    display:grid!important;
+    grid-template-columns:repeat(3,1fr);
+    gap:8px!important;
+    margin-top:10px!important;
+  }
+  .mini-stat{
+    min-width:0;
+    min-height:64px;
+    padding:10px 6px!important;
+    display:grid;
+    place-items:center;
+    align-content:center;
+    gap:3px;
+    border-radius:15px!important;
+    border:1px solid rgba(74,120,89,.48)!important;
+    background:linear-gradient(180deg,rgba(14,39,25,.9),rgba(8,28,17,.9))!important;
+  }
+  .mini-stat strong{font-size:.92rem!important;line-height:1.1;letter-spacing:-.02em}
+  .mini-stat small{font-size:.61rem!important;line-height:1;color:var(--text-soft);letter-spacing:.03em}
   .physics-readout{display:none!important}
 
-  .substitution-card{left:8px!important;right:8px!important;top:auto!important;bottom:8px!important;width:auto!important;max-width:none!important}
-  .half-time-panel,.penalty-panel{padding:8px!important;align-items:flex-end!important}
-  .half-card,.penalty-card{width:100%!important;max-height:78svh;overflow:auto;border-radius:18px!important;padding:16px!important}
+  /* Narration is a clean bottom sheet with enough breathing room. */
+  .narration-drawer{
+    position:fixed!important;
+    left:10px!important;
+    right:10px!important;
+    top:auto!important;
+    bottom:calc(10px + env(safe-area-inset-bottom))!important;
+    width:auto!important;
+    height:min(58svh,500px)!important;
+    z-index:150!important;
+    overflow:hidden!important;
+    border:1px solid rgba(79,129,96,.62)!important;
+    border-radius:22px!important;
+    background:linear-gradient(180deg,rgba(14,42,26,.99),rgba(6,24,14,.99))!important;
+    box-shadow:0 -18px 60px rgba(0,0,0,.52)!important;
+    transform:translateY(calc(100% + 34px))!important;
+    transition:transform .26s cubic-bezier(.22,.7,.25,1)!important;
+    pointer-events:none!important;
+  }
+  .narration-drawer::before{
+    content:"";
+    display:block;
+    width:44px;
+    height:4px;
+    margin:8px auto 0;
+    border-radius:999px;
+    background:rgba(255,255,255,.2);
+  }
+  .narration-drawer.open{transform:translateY(0)!important;pointer-events:auto!important}
+  .narration-head{
+    position:sticky;
+    top:0;
+    z-index:2;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:9px 12px 10px!important;
+    background:rgba(11,34,21,.98);
+    border-bottom:1px solid rgba(77,126,94,.42);
+  }
+  .narration-head h3{font-size:.88rem;margin:0;letter-spacing:-.01em}
+  .narration-head .icon-btn{width:34px;height:34px;border-radius:10px;font-size:1.1rem}
+  .feed-list{
+    padding:8px 10px 14px!important;
+    overflow:auto!important;
+    height:calc(100% - 62px)!important;
+    -webkit-overflow-scrolling:touch;
+  }
+  .feed-event{
+    display:grid!important;
+    grid-template-columns:32px 24px minmax(0,1fr)!important;
+    align-items:start!important;
+    gap:7px!important;
+    margin:0 0 7px!important;
+    padding:10px 10px!important;
+    border-radius:13px!important;
+    border:1px solid rgba(75,120,90,.42)!important;
+    background:rgba(9,31,19,.72)!important;
+    font-size:.76rem!important;
+    line-height:1.38!important;
+  }
+  .feed-minute{font-size:.7rem!important;color:#91a99a!important;padding-top:1px}
+  .feed-icon{text-align:center}
+
+  /* Match feedback layers fit the viewport instead of fighting the field. */
+  .substitution-card{left:10px!important;right:10px!important;top:auto!important;bottom:10px!important;width:auto!important;max-width:none!important;border-radius:16px!important}
+  .half-time-panel,.penalty-panel{padding:10px!important;align-items:flex-end!important}
+  .half-card,.penalty-card{width:100%!important;max-height:78svh;overflow:auto;border-radius:20px!important;padding:18px!important}
   .penalty-goal{min-height:190px!important}
 
-  .game-dialog{width:calc(100% - 14px)!important;max-width:none!important;margin:auto 7px 7px!important}
-  .game-dialog .dialog-card{max-height:78svh;overflow:auto;padding:15px!important;border-radius:18px!important}
+  /* Dialogs are centered, readable and finger-friendly. */
+  .game-dialog{
+    width:calc(100% - 20px)!important;
+    max-width:520px!important;
+    margin:auto!important;
+    padding:0!important;
+    border-radius:22px!important;
+  }
+  .game-dialog .dialog-card{max-height:80svh;overflow:auto;padding:18px!important;border-radius:22px!important}
+  .game-dialog label{gap:7px}
+  .game-dialog select{min-height:48px}
+  .game-dialog .dialog-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .game-dialog .dialog-actions .btn{width:100%;min-height:46px}
 }
 
 @media(max-width:390px){
-  .scoreboard{grid-template-columns:minmax(0,1fr) 82px minmax(0,1fr)}
-  .score-team-name{font-size:.66rem}.score-value{font-size:1.3rem}
-  .camera-btn{font-size:.56rem!important;padding:4px 6px!important}
-  .match-controls>.btn{font-size:.73rem}
+  body:has(.match-page) .app-shell{padding-left:7px;padding-right:7px}
+  .scoreboard{grid-template-columns:minmax(0,1fr) 92px minmax(0,1fr);padding:9px 9px}
+  .score-team-name{font-size:.69rem}
+  .score-value{font-size:1.58rem}
+  .camera-btn{font-size:.58rem!important;padding:5px 7px!important}
+  .match-controls>.btn{font-size:.75rem}
+  .mini-stat strong{font-size:.84rem!important}
 }
