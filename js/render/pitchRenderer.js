@@ -140,7 +140,20 @@
     drawPenalty(s,'top');drawPenalty(s,'bottom');drawCorners(s);drawGoal(s,'top',s.netPulseTop);drawGoal(s,'bottom',s.netPulseBottom);ctx.restore();
   }
   function drawArea(s,side,width,depth){const ctx=s.ctx,left=(F.width-width)/2,right=left+width,y1=side==='top'?0:F.length-depth,y2=side==='top'?depth:F.length,a=cameraWorldToCanvas(s,left,y1),b=cameraWorldToCanvas(s,right,y2);ctx.strokeRect(Math.min(a.x,b.x),Math.min(a.y,b.y),Math.abs(b.x-a.x),Math.abs(b.y-a.y));}
-  function drawPenalty(s,side){const ctx=s.ctx,sy=side==='top'?F.penaltySpot:F.length-F.penaltySpot,c=cameraWorldToCanvas(s,F.width/2,sy),scale=c.scale;ctx.beginPath();ctx.arc(c.x,c.y,Math.max(2,scale*.16),0,Math.PI*2);ctx.fill();ctx.save();const boundary=side==='top'?F.penaltyAreaDepth:F.length-F.penaltyAreaDepth,b=cameraWorldToCanvas(s,0,boundary).y;ctx.beginPath();if(side==='top')ctx.rect(-10000,b,s.canvas.width+20000,s.canvas.height+10000);else ctx.rect(-10000,-10000,s.canvas.width+20000,b+10000);ctx.clip();ctx.beginPath();ctx.arc(c.x,c.y,F.penaltyArcRadius*scale,0,Math.PI*2);ctx.stroke();ctx.restore();}
+  function drawPenalty(s,side){
+  const ctx=s.ctx,sy=side==='top'?F.penaltySpot:F.length-F.penaltySpot,c=cameraWorldToCanvas(s,F.width/2,sy),scale=c.scale;
+  ctx.beginPath();ctx.arc(c.x,c.y,Math.max(2,scale*.16),0,Math.PI*2);ctx.fill();
+  const boundary=side==='top'?F.penaltyAreaDepth:F.length-F.penaltyAreaDepth;
+  let drawing=false;ctx.beginPath();
+  for(let i=0;i<=96;i++){
+    const a=i/96*Math.PI*2,wx=F.width/2+Math.cos(a)*F.penaltyArcRadius,wy=sy+Math.sin(a)*F.penaltyArcRadius;
+    const visible=side==='top'?wy>=boundary:wy<=boundary;
+    if(!visible){drawing=false;continue;}
+    const q=cameraWorldToCanvas(s,wx,wy);
+    if(!drawing){ctx.moveTo(q.x,q.y);drawing=true;}else ctx.lineTo(q.x,q.y);
+  }
+  ctx.stroke();
+}
   function drawCorners(s){const ctx=s.ctx;[[0,0,0],[F.width,0,Math.PI/2],[F.width,F.length,Math.PI],[0,F.length,Math.PI*1.5]].forEach(([x,y,a])=>{const c=cameraWorldToCanvas(s,x,y),r=F.cornerRadius*c.scale;ctx.beginPath();ctx.arc(c.x,c.y,r,a,a+Math.PI/2);ctx.stroke();});}
   function drawGoal(s,side,pulse){
     const ctx=s.ctx,m=G.goalMouthX(),lineY=side==='top'?0:F.length,backY=side==='top'?-F.goalDepth:F.length+F.goalDepth;
@@ -156,8 +169,13 @@
     ctx.fillStyle='rgba(182,242,58,.13)';ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(p2.x,p2.y);ctx.lineTo(b2.x,b2.y);ctx.lineTo(b1.x,b1.y);ctx.closePath();ctx.fill();
     ctx.strokeStyle='rgba(0,0,0,.28)';ctx.lineWidth=Math.max(3,p1.scale*.22);ctx.beginPath();ctx.moveTo(b1.x+3,b1.y+4);ctx.lineTo(b2.x+3,b2.y+4);ctx.stroke();
     ctx.strokeStyle='rgba(255,255,255,.72)';ctx.lineWidth=Math.max(1.5,p1.scale*.12);ctx.beginPath();ctx.moveTo(b1.x,b1.y);ctx.lineTo(b2.x,b2.y);ctx.stroke();
-    ctx.restore();
-  }
+  const postH=Math.max(12,2.44*p1.scale*.90),lean=side==='top'?-postH*.12:postH*.12;
+  const up1={x:p1.x+lean,y:p1.y-postH},up2={x:p2.x+lean,y:p2.y-postH},ub1={x:b1.x+lean*.72,y:b1.y-postH*.86},ub2={x:b2.x+lean*.72,y:b2.y-postH*.86};
+  ctx.strokeStyle='#FFFFFF';ctx.lineWidth=Math.max(3,p1.scale*.24);ctx.lineCap='round';ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(up1.x,up1.y);ctx.moveTo(p2.x,p2.y);ctx.lineTo(up2.x,up2.y);ctx.moveTo(up1.x,up1.y);ctx.lineTo(up2.x,up2.y);ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,.48)';ctx.lineWidth=Math.max(1,p1.scale*.08);ctx.beginPath();ctx.moveTo(up1.x,up1.y);ctx.lineTo(ub1.x,ub1.y);ctx.lineTo(ub2.x,ub2.y);ctx.lineTo(up2.x,up2.y);ctx.stroke();
+  for(let i=1;i<5;i++){const t=i/5;ctx.beginPath();ctx.moveTo(up1.x+(up2.x-up1.x)*t,up1.y+(up2.y-up1.y)*t);ctx.lineTo(ub1.x+(ub2.x-ub1.x)*t,ub1.y+(ub2.y-ub1.y)*t);ctx.stroke();}
+  ctx.restore();
+}
 
   function updateAnimationState(pl,dt){
     pl.animTime+=dt;pl.animPhase+=dt;
@@ -223,7 +241,7 @@
     const p1=cameraWorldToCanvas(s,from.x,from.y),p2=cameraWorldToCanvas(s,to.x,to.y),ctx=s.ctx;ctx.save();ctx.strokeStyle='rgba(182,242,58,.88)';ctx.fillStyle='#B6F23A';ctx.lineWidth=2.2;ctx.setLineDash([8,7]);ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(p2.x,p2.y);ctx.stroke();ctx.setLineDash([]);const ang=Math.atan2(p2.y-p1.y,p2.x-p1.x);ctx.beginPath();ctx.moveTo(p2.x,p2.y);ctx.lineTo(p2.x-Math.cos(ang-.45)*12,p2.y-Math.sin(ang-.45)*12);ctx.lineTo(p2.x-Math.cos(ang+.45)*12,p2.y-Math.sin(ang+.45)*12);ctx.closePath();ctx.fill();ctx.restore();
   }
   function drawBall(s){
-    if(!s.ball)return;const b=s.ball,c=cameraWorldToCanvas(s,b.x,b.y),r=Math.max(4,Math.min(8,0.54*c.scale)),heightPx=Math.min(r*4,(b.z||0)*c.scale*.42),ctx=s.ctx;ctx.save();ctx.fillStyle='rgba(0,0,0,.28)';ctx.beginPath();ctx.ellipse(c.x+2,c.y+3,r*.95,r*.48,0,0,Math.PI*2);ctx.fill();const by=c.y-heightPx;ctx.translate(c.x,by);ctx.rotate(b.rotation||0);ctx.fillStyle='#FFFFFF';ctx.strokeStyle='#D9E2DC';ctx.lineWidth=1;ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.strokeStyle='#152018';ctx.lineWidth=Math.max(1,r*.18);ctx.beginPath();ctx.moveTo(-r*.65,0);ctx.lineTo(r*.65,0);ctx.moveTo(0,-r*.65);ctx.lineTo(0,r*.65);ctx.stroke();ctx.fillStyle='#152018';ctx.beginPath();ctx.arc(0,0,r*.26,0,Math.PI*2);ctx.fill();ctx.restore();
+    if(!s.ball)return;const b=s.ball,c=cameraWorldToCanvas(s,b.x,b.y),r=Math.max(4,Math.min(8,0.54*c.scale)),heightPx=Math.min(r*9,(b.z||0)*c.scale*.90),ctx=s.ctx;ctx.save();ctx.fillStyle='rgba(0,0,0,.28)';ctx.beginPath();ctx.ellipse(c.x+2,c.y+3,r*.95,r*.48,0,0,Math.PI*2);ctx.fill();const by=c.y-heightPx;ctx.translate(c.x,by);ctx.rotate(b.rotation||0);ctx.fillStyle='#FFFFFF';ctx.strokeStyle='#D9E2DC';ctx.lineWidth=1;ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.strokeStyle='#152018';ctx.lineWidth=Math.max(1,r*.18);ctx.beginPath();ctx.moveTo(-r*.65,0);ctx.lineTo(r*.65,0);ctx.moveTo(0,-r*.65);ctx.lineTo(0,r*.65);ctx.stroke();ctx.fillStyle='#152018';ctx.beginPath();ctx.arc(0,0,r*.26,0,Math.PI*2);ctx.fill();ctx.restore();
   }
   function drawMiniMap(s){
     if(s.preview)return;const ctx=s.ctx,w=Math.min(190,s.canvas.width*.22),h=w*(F.width/F.length),x=(s.canvas.width-w)/2,y=s.canvas.height-h-12;ctx.save();ctx.fillStyle='rgba(5,20,10,.82)';roundRect(ctx,x,y,w,h,10);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.36)';ctx.stroke();const pad=8,fx=x+pad,fy=y+pad,fw=w-pad*2,fh=h-pad*2;ctx.strokeStyle='rgba(255,255,255,.7)';ctx.strokeRect(fx,fy,fw,fh);ctx.beginPath();ctx.moveTo(fx+fw/2,fy);ctx.lineTo(fx+fw/2,fy+fh);ctx.stroke();for(const pl of s.players){const px=fx+pl.y/F.length*fw,py=fy+pl.x/F.width*fh;ctx.fillStyle=pl.key==='A'?'#3B82F6':'#FF6B35';ctx.beginPath();ctx.arc(px,py,2.8,0,Math.PI*2);ctx.fill();}ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(fx+s.ball.y/F.length*fw,fy+s.ball.x/F.width*fh,2.5,0,Math.PI*2);ctx.fill();ctx.restore();
