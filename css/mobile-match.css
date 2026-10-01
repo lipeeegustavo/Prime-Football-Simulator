@@ -1,0 +1,169 @@
+/* Prime Football Simulator — mobile match polish v10 */
+
+/* Broadcast depth: keep the existing canvas engine, but give the stage visual perspective. */
+.stadium-card{
+  perspective:1400px;
+  perspective-origin:50% 38%;
+  background:linear-gradient(180deg,#07160d,#051009);
+  box-shadow:0 20px 60px rgba(0,0,0,.32),inset 0 0 0 1px rgba(255,255,255,.025);
+}
+.pitch-stage{
+  overflow:visible;
+  transform-style:preserve-3d;
+  filter:drop-shadow(0 16px 22px rgba(0,0,0,.24));
+}
+.pitch-canvas{
+  transform-origin:50% 100%;
+  transform:perspective(1800px) rotateX(2.2deg);
+  border:1px solid rgba(255,255,255,.2);
+  box-shadow:inset 0 0 44px rgba(0,0,0,.13);
+}
+
+/* Goal frames are only shown in full-field camera, so they do not float on top of follow camera. */
+.pitch-stage:has([data-camera="full"].active)::before,
+.pitch-stage:has([data-camera="full"].active)::after{
+  content:"";
+  position:absolute;
+  z-index:2;
+  top:38%;
+  width:3.4%;
+  height:24%;
+  pointer-events:none;
+  border:3px solid rgba(255,255,255,.96);
+  background:
+    repeating-linear-gradient(0deg,rgba(255,255,255,.25) 0 1px,transparent 1px 8px),
+    repeating-linear-gradient(90deg,rgba(255,255,255,.22) 0 1px,transparent 1px 8px),
+    rgba(235,245,238,.035);
+  box-shadow:0 5px 10px rgba(0,0,0,.28),inset 0 0 10px rgba(255,255,255,.08);
+}
+.pitch-stage:has([data-camera="full"].active)::before{
+  left:-1.65%;
+  border-right-width:1px;
+  transform:perspective(220px) rotateY(-23deg) skewY(-1deg);
+  transform-origin:right center;
+}
+.pitch-stage:has([data-camera="full"].active)::after{
+  right:-1.65%;
+  border-left-width:1px;
+  transform:perspective(220px) rotateY(23deg) skewY(1deg);
+  transform-origin:left center;
+}
+
+/* Better overlay/readability without hiding the play. */
+.camera-controls{backdrop-filter:blur(8px)}
+.narration-drawer{background:rgba(8,28,17,.96);backdrop-filter:blur(18px)}
+
+@media(max-width:700px){
+  html,body{overflow-x:hidden}
+  body:has(.match-page) .topbar{
+    height:54px;
+    padding:max(6px,env(safe-area-inset-top)) 10px 6px;
+    position:sticky;
+  }
+  body:has(.match-page) .brand{gap:7px}
+  body:has(.match-page) .brand-mark{width:32px;height:32px;border-radius:9px;font-size:1rem}
+  body:has(.match-page) .brand strong{font-size:.82rem}
+  body:has(.match-page) .brand small{display:none}
+  body:has(.match-page) .seed-chip{display:none!important}
+  body:has(.match-page) #homeBtn{min-height:34px;padding:6px 9px;font-size:.72rem}
+
+  body:has(.match-page) .progress-shell{padding:5px 8px 0}
+  body:has(.match-page) .stepper{gap:3px}
+  body:has(.match-page) .step{font-size:0;gap:0}
+  body:has(.match-page) .step::before{height:3px}
+  body:has(.match-page) .app-shell{padding:7px 6px calc(18px + env(safe-area-inset-bottom));width:100%;max-width:none}
+  .match-page{gap:7px;width:100%}
+
+  .scoreboard{
+    min-height:66px;
+    grid-template-columns:minmax(0,1fr) 92px minmax(0,1fr);
+    padding:7px 9px;
+    border-radius:13px;
+    gap:5px;
+  }
+  .score-team{gap:5px}.score-team-name{font-size:.72rem}.team-dot{width:9px;height:9px}
+  .score-value{font-size:1.42rem}.match-clock{font-size:.72rem}.half-label{font-size:.52rem}
+
+  .stadium-card{padding:3px;border-radius:12px;overflow:visible}
+  .pitch-stage{
+    aspect-ratio:16/9!important;
+    width:100%;
+    min-height:0!important;
+    border-radius:10px;
+  }
+  .pitch-canvas{border-radius:10px;transform:perspective(1000px) rotateX(1.5deg)}
+  .pitch-stage:has([data-camera="full"].active)::before,
+  .pitch-stage:has([data-camera="full"].active)::after{border-width:2px;width:4.2%;height:25%;top:37.5%}
+  .pitch-stage:has([data-camera="full"].active)::before{left:-2%}
+  .pitch-stage:has([data-camera="full"].active)::after{right:-2%}
+
+  .camera-controls{
+    right:6px;
+    top:6px;
+    gap:4px;
+    padding:3px;
+    border-radius:10px;
+    background:rgba(5,20,10,.52);
+  }
+  .camera-btn{min-height:30px!important;padding:5px 7px!important;font-size:.62rem!important;border-radius:7px!important}
+
+  /* Narration becomes a real bottom sheet. It no longer replaces/covers the pitch by default. */
+  .narration-drawer{
+    position:fixed!important;
+    left:7px!important;
+    right:7px!important;
+    bottom:calc(8px + env(safe-area-inset-bottom))!important;
+    top:auto!important;
+    width:auto!important;
+    height:min(52svh,420px)!important;
+    z-index:120!important;
+    border:1px solid var(--line);
+    border-radius:18px!important;
+    box-shadow:0 -12px 50px rgba(0,0,0,.46);
+    transform:translateY(calc(100% + 30px))!important;
+    pointer-events:none!important;
+  }
+  .narration-drawer.open{transform:translateY(0)!important;pointer-events:auto!important}
+  .narration-head{position:sticky;top:0;background:rgba(8,28,17,.98);z-index:2;padding:11px 12px!important}
+  .narration-head h3{font-size:.9rem;margin:0}
+  .feed-list{padding:0 8px 10px!important;overflow:auto!important;-webkit-overflow-scrolling:touch}
+  .feed-event{grid-template-columns:34px 27px 1fr!important;gap:5px!important;padding:8px 7px!important;font-size:.75rem!important}
+  .feed-minute{font-size:.72rem!important}
+
+  .match-controls{
+    display:grid!important;
+    grid-template-columns:1fr 1fr;
+    gap:7px!important;
+    padding:7px!important;
+    margin-top:7px!important;
+    border:1px solid var(--line);
+    border-radius:14px;
+    background:rgba(13,36,23,.86);
+  }
+  .match-controls>.btn{width:100%;min-height:43px;padding:8px 9px;font-size:.78rem;border-radius:10px}
+  .match-controls>.segmented{grid-column:1/-1;display:grid!important;grid-template-columns:repeat(3,1fr);width:100%;order:3}
+  .match-controls>.segmented button{min-height:39px;font-size:.8rem;padding:6px}
+  #pauseBtn{grid-column:1/2;order:1}
+  #subBtn{grid-column:2/3;order:2}
+  #restartBtn{grid-column:1/-1;order:4;min-height:38px!important;background:transparent}
+
+  .stat-strip{display:grid!important;grid-template-columns:repeat(3,1fr);gap:6px!important;margin-top:7px!important}
+  .mini-stat{padding:8px 4px!important;min-height:58px;border-radius:12px!important}
+  .mini-stat strong{font-size:.85rem!important}.mini-stat small{font-size:.62rem!important}
+  .physics-readout{display:none!important}
+
+  .substitution-card{left:8px!important;right:8px!important;top:auto!important;bottom:8px!important;width:auto!important;max-width:none!important}
+  .half-time-panel,.penalty-panel{padding:8px!important;align-items:flex-end!important}
+  .half-card,.penalty-card{width:100%!important;max-height:78svh;overflow:auto;border-radius:18px!important;padding:16px!important}
+  .penalty-goal{min-height:190px!important}
+
+  .game-dialog{width:calc(100% - 14px)!important;max-width:none!important;margin:auto 7px 7px!important}
+  .game-dialog .dialog-card{max-height:78svh;overflow:auto;padding:15px!important;border-radius:18px!important}
+}
+
+@media(max-width:390px){
+  .scoreboard{grid-template-columns:minmax(0,1fr) 82px minmax(0,1fr)}
+  .score-team-name{font-size:.66rem}.score-value{font-size:1.3rem}
+  .camera-btn{font-size:.56rem!important;padding:4px 6px!important}
+  .match-controls>.btn{font-size:.73rem}
+}
