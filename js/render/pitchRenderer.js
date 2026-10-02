@@ -321,7 +321,10 @@
   }
 
   function completeReceive(action,target,result){
-    scene.ball.x=target.x;scene.ball.y=target.y;scene.ball.vx=scene.ball.vy=0;setCarrier(target.key,target.id);setAnim(target,'control',.35);const cb=action.done;scene.action=null;cb&&cb(result||{});
+    const fallback=Boolean(result&&(result.fallback||result.timeout));
+    if(fallback){target.x=scene.ball.x;target.y=scene.ball.y;target.tx=target.x;target.ty=target.y;}
+    else{scene.ball.x=target.x;scene.ball.y=target.y;}
+    scene.ball.z=0;scene.ball.vx=scene.ball.vy=scene.ball.vz=0;setCarrier(target.key,target.id);setAnim(target,'control',.35);const cb=action.done;scene.action=null;cb&&cb(result||{});
   }
   function updateAction(dt,prev,wasGoal){
     const a=scene.action;if(!a)return;a.elapsed=(a.elapsed||0)+dt;
