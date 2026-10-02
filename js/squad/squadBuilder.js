@@ -7,14 +7,24 @@
   function eligibleForPosition(player,pos){ return Boolean(player && player.positions.includes(pos)); }
   function rosterIds(team){ return [...team.starters,...team.bench].filter(Boolean).map(String); }
   function ensureShirtNumbers(team){
-    team.numbers=team.numbers||{};
-    const used=new Set();
-    const ids=[...team.starters,...team.bench].filter(Boolean).map(String);
-    // Mantém números já válidos e únicos.
-    ids.forEach(id=>{const n=Number(team.numbers[id]); if(n>=1&&n<=99&&!used.has(n)) used.add(n); else delete team.numbers[id];});
-    const preferred=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30];
-    ids.forEach(id=>{if(team.numbers[id])return; const n=preferred.find(v=>!used.has(v)); team.numbers[id]=n||([...Array(99)].map((_,i)=>i+1).find(v=>!used.has(v))); used.add(team.numbers[id]);});
-    Object.keys(team.numbers).forEach(id=>{if(!ids.includes(String(id)))delete team.numbers[id];});
+    // Numeração de futebol: titulares recebem números coerentes por posição.
+    const positional={
+      GOL:[1,12,23],LD:[2,22,14],LE:[3,6,16],ZAG:[4,5,13,15],VOL:[5,6,8,14],
+      MC:[8,6,7,10],MEI:[10,8,7,11],PD:[7,11,17],PE:[11,7,17],CA:[9,10,19],SA:[10,9,11],ALA:[2,3,6,7]
+    };
+    const numbers={},used=new Set(),positions=FORMATIONS[team.formation]||[];
+    const take=(prefs)=>{const n=(prefs||[]).find(v=>!used.has(v))||Array.from({length:99},(_,i)=>i+1).find(v=>!used.has(v));used.add(n);return n;};
+    (team.starters||[]).forEach((id,i)=>{
+      if(!id)return;
+      const pos=positions[i]||playerById(id)?.positions?.[0]||'MC';
+      numbers[String(id)]=take(positional[pos]||[]);
+    });
+    (team.bench||[]).forEach(id=>{
+      if(!id||numbers[String(id)])return;
+      numbers[String(id)]=take(Array.from({length:88},(_,i)=>i+12));
+    });
+    team.numbers=numbers;
+    team.numberingVersion='football-v2';
     return team.numbers;
   }
   function shirtNumber(team,id){ensureShirtNumbers(team);return team.numbers[String(id)]||'?';}

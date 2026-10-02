@@ -510,7 +510,7 @@
     const resultText=resultKind==='GOAL'?'marca':resultKind==='SAVE'?'tem a cobrança defendida':resultKind==='OVER'?'manda por cima do gol':'manda para fora';
     emit(state,`${state.teams[pn.team].name}: ${playerById(pn.shooterId)?.name||'Jogador'} ${resultText}.`,scored?'goal':'event','PENALTY_KICK',{...pn,scored,shotZone,diveZone,resultKind});
     const next=()=>{m.pendingPenalty=null;s.index++;requestNextPenalty(state);};
-    if(Prime.Pitch?.playPenalty)Prime.Pitch.playPenalty(pn.team,pn.shooterId,shotZone,diveZone,scored,next,{resultKind});else next();
+    if(Prime.Pitch?.playPenalty)Prime.Pitch.playPenalty(pn.team,pn.shooterId,shotZone,diveZone,scored,next,{resultKind,interactiveRole:pn.humanShooter?'shooter':pn.humanKeeper?'keeper':'auto'});else next();
     return {ok:true,scored};
   }
   function finishAfterShootout(state){
