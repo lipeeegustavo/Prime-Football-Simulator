@@ -19,7 +19,7 @@
       transitionWindow: 7.5,
       maxPossessionActions: 8,
       minPossessionActions: 2,
-      foulChance: 0.06,
+      foulChance: 0.085,
       // Valores negativos desativam completamente os eventos artificiais no motor antigo.
       // Lateral/escanteio/tiro de meta passam a nascer somente da física das linhas do campo.
       throwInChance: -1,

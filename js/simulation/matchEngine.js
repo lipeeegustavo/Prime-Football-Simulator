@@ -40,6 +40,14 @@
     const list=outfield(state,key);
     return weightedPick(list,p=>(attrs(p).dribbling||70)+(attrs(p).passing||70)*.5+(p.group==='ATA'?15:0),r);
   }
+  function nearestLooseBallPlayer(state,key){
+    const scene=Prime.Pitch?.getScene?.(),m=state.match,b=scene?.ball;
+    if(!scene||!m||!b||b.state!=='dead'||m.stoppageWindow||scene.action)return null;
+    const sent=new Set((m.sentOff?.[key]||[]).map(String));
+    const list=(scene.players||[]).filter(p=>p.key===key&&!p.isKeeper&&!sent.has(String(p.id)));
+    if(!list.length)return null;
+    return list.map(p=>({p,d:Math.hypot(p.x-b.x,p.y-b.y)})).sort((a,b)=>a.d-b.d)[0]||null;
+  }
   function chooseReceiver(state,key,from,r){
     const list=outfield(state,key).filter(p=>p.id!==from.id);
     return weightedPick(list,p=>(attrs(p).positioning||70)+(attrs(p).pace||70)*.25+(p.group==='ATA'?18:0),r);
@@ -66,8 +74,8 @@
     const quality=(a.finishing||70)*.46+(a.positioning||70)*.22+(a.dribbling||70)*.08+coach.passRisk*.05;
     const resistance=(ga.goalkeeping||gk?.overall||75)*.5+(ga.positioning||75)*.18+defCoach.pressing*.05;
     const x=quality-resistance;
-    const goal=Math.max(.008,Math.min(.31,(.105+x*.0052)*distanceFactor*angleFactor));
-    const save=Math.max(.20,Math.min(.68,.46-x*.003+(1-distanceFactor)*.09));
+    const goal=Math.max(.012,Math.min(.42,(.165+x*.0058)*distanceFactor*angleFactor));
+    const save=Math.max(.18,Math.min(.62,.42-x*.003+(1-distanceFactor)*.075));
     const n=r();
     if(n<goal)return'GOAL';
     if(n<goal+save)return'SAVE';
@@ -119,7 +127,7 @@
   function logEvent(state,evt){
     const p=id=>playerById(id)?.name||'Jogador';let text='',cls='event';
     switch(evt.type){
-      case'PASS':text=`${evt.minute}' — ${p(evt.fromId)} toca para ${p(evt.toId)}.`;break;
+      case'PASS':text=evt.throughBall?`${evt.minute}' — ${p(evt.fromId)} enfia a bola para ${p(evt.toId)}!`:`${evt.minute}' — ${p(evt.fromId)} toca para ${p(evt.toId)}.`;break;
       case'RECEIVE':text=`${evt.minute}' — ${p(evt.playerId)} domina.`;break;
       case'DRIBBLE':text=`${evt.minute}' — ${p(evt.playerId)} parte para o drible.`;break;
       case'CUT_INSIDE':text=`${evt.minute}' — ${p(evt.playerId)} corta para dentro.`;break;
@@ -217,8 +225,8 @@
     const p=playerById(playerId);if(!p||p.group==='GOL')return;
     const r=m.rng,n=r();
     let card=null,directRed=false,secondYellow=false,cardReason=reason||pickFoulReason(m,'normal');
-    if(n<.035){card='RED_CARD';directRed=true;cardReason=pickFoulReason(m,'red');}
-    else if(n<.29)card='YELLOW_CARD';
+    if(n<.006){card='RED_CARD';directRed=true;cardReason=pickFoulReason(m,'red');}
+    else if(n<.37)card='YELLOW_CARD';
     if(!card)return;
     const key=String(playerId),count=(m.cards[team][key]||0);
     if(card==='YELLOW_CARD'){
@@ -241,6 +249,9 @@
     const tac=tactics(state,atk),defTac=tactics(state,def);
     let carrier=playerById(m.carrierId);
     if(!carrier||carrier.group==='GOL')carrier=chooseCarrier(state,atk,r);
+    const loose=nearestLooseBallPlayer(state,atk);
+    const currentLive=carrier?livePlayer(atk,carrier.id):null;
+    if(loose&&(!currentLive||loose.d+2.2<Math.hypot(currentLive.x-Prime.Pitch.getBall().x,currentLive.y-Prime.Pitch.getBall().y)))carrier=playerById(loose.p.id)||carrier;
     if(!carrier)return;
     m.carrierId=carrier.id;
 
@@ -301,7 +312,12 @@
     if(phase==='FINAL_THIRD')shootBias=.075+(fin/100)*.09+(carrier.positions.includes('CA')?.045:0);
     if(actions>=7)shootBias+=.045;
     if(minute>75)shootBias+=.012;
-    shootBias=Math.min(.38,shootBias*(evCfg.shotBoost||1.75));
+    const liveCarrier=livePlayer(atk,carrier.id),goalY=attacksTop(atk,state)?0:Prime.FieldGeometry.FIELD.length;
+    const distanceToGoal=liveCarrier?Math.hypot(liveCarrier.x-Prime.FieldGeometry.FIELD.width/2,liveCarrier.y-goalY):99;
+    const isStriker=carrier.positions.includes('CA')||carrier.positions.includes('SA');
+    shootBias=Math.min(.50,shootBias*(evCfg.shotBoost||1.75));
+    if(isStriker&&phase==='FINAL_THIRD'&&distanceToGoal<30)shootBias=Math.max(shootBias,.58);
+    if(isStriker&&distanceToGoal<20)shootBias=Math.max(shootBias,.72);
 
     if(r()<shootBias){
       const shooter=carrier; // only the actual ball carrier shoots; avoids cross-field visual teleport
@@ -360,7 +376,10 @@
     const wide=carrier.positions.some(x=>['PE','PD','ALA','LD','LE'].includes(x));
     const targetStriker=receiverData.positions?.some(x=>['CA','SA'].includes(x));
     const cross=phase==='FINAL_THIRD'&&wide&&targetStriker&&r()<.42;
-    const evt={type:cross?'CROSS':'PASS',team:atk,fromId:carrier.id,toId:receiver.id,minute};
+    const fromLive=livePlayer(atk,carrier.id),toLive=livePlayer(atk,receiver.id),dir=attackDirection(atk,state);
+    const forwardGain=fromLive&&toLive?(toLive.y-fromLive.y)*dir:0;
+    const throughBall=!cross&&phase!=='BUILDUP'&&forwardGain>5&&targetStriker&&r()<(phase==='FINAL_THIRD'?.34:.22);
+    const evt={type:cross?'CROSS':'PASS',team:atk,fromId:carrier.id,toId:receiver.id,minute,throughBall};
     m.stats.passes[atk]++;m.possessionActions++;
     logEvent(state,evt);
     queueVisual(state,evt,()=>{

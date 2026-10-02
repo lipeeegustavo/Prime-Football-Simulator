@@ -136,6 +136,8 @@
       A: scene.players.filter(p => p.key === 'A'),
       B: scene.players.filter(p => p.key === 'B')
     };
+    const looseBall=ball.state==='dead'&&!scene.action&&!state.match?.stoppageWindow;
+    const looseChaser=looseBall?nearestPlayers(ball,scene.players.filter(p=>!p.isKeeper),1)[0]?.p:null;
 
     for (const key of ['A', 'B']) {
       const teamState = state.teams[key];
@@ -210,6 +212,8 @@
           }
         }
 
+        if(looseChaser===pl){tx=ballX;ty=ballY;}
+
         if (pl.isKeeper) {
           const sweep = pdata?.profileStyle === 'sweeper_keeper' ? 8.5 : 5.2;
           const halfGoal=Math.max(2.8,F.goalWidth/2-.35);
@@ -225,6 +229,7 @@
         const transitionCoach=1+Math.max(-.08,Math.min(.18,((tac.transitionSpeed||68)-60)*.004));
         if (phase === 'transition_attack') speedBoost = (M.transitionBoost || 1.12)*transitionCoach;
         if (phase === 'transition_defend') speedBoost = (M.recoveryBoost || 1.13)*(0.96+Math.min(.12,(tac.pressing||60)*.0015));
+        if(looseChaser===pl)speedBoost=Math.max(speedBoost,1.32);
         const tempoBoost=.94+Math.min(.12,(tac.tempo||65)*.0015);
         pl.maxSpeed = maxSpeedFor(pdata) * (0.84 + 0.16 * stamina) * speedBoost * tempoBoost;
         pl.accel = accelFor(pdata) * (0.88 + 0.12 * stamina) * speedBoost * tempoBoost;

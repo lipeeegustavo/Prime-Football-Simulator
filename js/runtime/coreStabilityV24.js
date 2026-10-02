@@ -33,7 +33,7 @@
     const a=attrs(shooter.id),fin=(a.finishing||70)/100,pos=(a.positioning||70)/100;
     const distFactor=clamp(1-(distance-12)/48,.18,1);
     const angleFactor=clamp(angle/.52,.18,1);
-    const acceptance=clamp(.18+.82*distFactor*angleFactor*(.58+.28*fin+.14*pos),.08,.98);
+    const acceptance=clamp(.34+.66*distFactor*angleFactor*(.62+.25*fin+.13*pos),.18,.995);
     const state=s.state,seed=state?.settings?.seed||'PRIME';
     const u=hash01(`${seed}|${state?.match?.gameSeconds||0}|${evt.team}|${shooter.id}|goal-accept`);
     return u<acceptance;
@@ -46,7 +46,8 @@
     if(!from||!to){done&&done({missing:true,fromId,toId});return;}
     const dist=Math.hypot(to.x-from.x,to.y-from.y);
     const cross=evt.type==='CROSS';
-    const speed=cross?clamp(23+dist*.22,24,33):clamp(17+dist*.42,18,32);
+    const through=Boolean(evt.throughBall);
+    const speed=cross?clamp(23+dist*.22,24,33):through?clamp(24+dist*.34,25,35):clamp(17+dist*.42,18,32);
     const mapped=Object.assign({},evt,{playerId:String(fromId),targetId:String(toId),fromId:String(fromId),toId:String(toId),speed});
     return originalPlayEvent?originalPlayEvent(mapped,done):done&&done({missing:true});
   }

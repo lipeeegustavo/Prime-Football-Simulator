@@ -300,7 +300,7 @@
   function startPass(evt,done){
     const fromId=evt.playerId||evt.fromId,targetId=evt.targetId||evt.toId;const from=findPlayerById(evt.team,fromId)||scene.carrier,to=findPlayerById(evt.team,targetId);if(!from||!to){done&&done({missing:true});return;}
     setCarrier(evt.team,from.id);setTarget(evt.team,to.id);setAnim(from,evt.type==='CROSS'?'cross':'pass',.46);
-    scene.action={type:'receive',team:evt.team,fromId:from.id,targetId:to.id,done,elapsed:0,stallElapsed:0,phase:'prep',impactAt:.16,impactDone:false,speed:evt.speed||B.ball?.passSpeed||18,ballState:evt.type==='CROSS'?'cross':'pass',loft:evt.type==='CROSS'?(B.ball?.crossLoft||.42):(evt.loft||0),spin:evt.type==='CROSS'?((to.x<from.x?-1:1)*(B.ball?.curveSpin||7.5)*.35):(evt.spin||0),leadSeconds:evt.type==='CROSS'?.36:.20};
+    scene.action={type:'receive',team:evt.team,fromId:from.id,targetId:to.id,done,elapsed:0,stallElapsed:0,phase:'prep',impactAt:.16,impactDone:false,speed:evt.speed||(evt.throughBall?(B.ball?.longPassSpeed||27.5):(B.ball?.passSpeed||18)),ballState:evt.type==='CROSS'?'cross':'pass',loft:evt.type==='CROSS'?(B.ball?.crossLoft||.42):(evt.loft||0),spin:evt.type==='CROSS'?((to.x<from.x?-1:1)*(B.ball?.curveSpin||7.5)*.35):(evt.spin||0),leadSeconds:evt.throughBall?.58:(evt.type==='CROSS'?.36:.20)};
   }
   function shoot(teamKey,shooterId,outcome,done){
     if(!scene){done&&done({missing:true});return;}const shooter=findPlayerById(teamKey,shooterId)||scene.carrier;if(!shooter){done&&done({missing:true});return;}
