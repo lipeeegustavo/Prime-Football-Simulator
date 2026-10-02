@@ -1,11 +1,11 @@
-name: apply v25 penalty receive and numbering fixes
+name: apply v26 gameplay stability and corners
 
 on:
   push:
     branches: [main]
     paths:
       - '.github/workflows/apply-v25-penalty-receive-numbering.yml'
-      - 'tools/apply_v25.py'
+      - 'tools/apply_v26.py'
   workflow_dispatch:
 
 permissions:
@@ -19,14 +19,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Apply v25 fixes
-        run: python tools/apply_v25.py
+      - name: Apply v26 gameplay fixes
+        run: python tools/apply_v26.py
       - name: Validate syntax
         run: |
-          node --check js/squad/squadBuilder.js
-          node --check js/render/pitchRenderer.js
           node --check js/simulation/matchEngine.js
-      - name: Commit v25
+          node --check js/runtime/coreStabilityV24.js
+          node --check js/runtime/physicalSetPiecesV21.js
+      - name: Commit v26
         run: |
           if git diff --quiet; then
             echo 'No changes needed.'
@@ -34,6 +34,6 @@ jobs:
           fi
           git config user.name 'Prime Football CI'
           git config user.email 'actions@users.noreply.github.com'
-          git add js/squad/squadBuilder.js js/render/pitchRenderer.js js/simulation/matchEngine.js
-          git commit -m 'fix: polish penalties receiving and shirt numbers'
+          git add js/simulation/matchEngine.js js/runtime/coreStabilityV24.js js/runtime/physicalSetPiecesV21.js
+          git commit -m 'fix: unstick match flow and animate corners'
           git push
