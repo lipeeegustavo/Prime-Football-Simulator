@@ -6,13 +6,23 @@
     lineHeight: 58, pressing: 60, tempo: 65,
     width: 65, passRisk: 55, transitionSpeed: 68
   };
+  const STYLE_MODIFIERS={
+    balanced:{},
+    possession:{lineHeight:4,pressing:3,tempo:-7,width:7,passRisk:-12,transitionSpeed:-4},
+    counter:{lineHeight:-8,pressing:-5,tempo:5,width:4,passRisk:8,transitionSpeed:18},
+    press:{lineHeight:12,pressing:20,tempo:8,width:-4,passRisk:2,transitionSpeed:10}
+  };
 
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
   function lerp(a, b, t) { return a + (b - a) * t; }
   function playerData(id) { return Prime.Squad.playerById(id); }
   function coachTactics(team) {
     const c = Prime.Squad.coachById(team.coach);
-    return c && c.tactics ? c.tactics : DEFAULT_TACTICS;
+    const base = c && c.tactics ? c.tactics : DEFAULT_TACTICS;
+    const mod=STYLE_MODIFIERS[team?.playStyle]||STYLE_MODIFIERS.balanced;
+    const out={...base};
+    for(const key of Object.keys(DEFAULT_TACTICS))out[key]=clamp(Number(base[key]??DEFAULT_TACTICS[key])+Number(mod[key]||0),25,95);
+    return out;
   }
   function maxSpeedFor(p) { return 4.8 + ((p?.attributes?.pace || 70) - 50) * 0.036; }
   function accelFor(p) { return 7.2 + ((p?.attributes?.physical || 70) - 50) * 0.052; }
