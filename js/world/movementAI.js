@@ -82,7 +82,6 @@
       y = own + dir * baseFromOwn;
     }
 
-    // Nunca deixa as linhas atravessarem completamente o gol adversário.
     const lo = Math.min(own, opp) + 5;
     const hi = Math.max(own, opp) - 5;
     return clamp(y, lo, hi);
@@ -155,17 +154,14 @@
 
         let tx = roleWidthX(pl, tac, ballX, attacking);
         let ty = laneY(pl.position, key, ballY, { possession: poss });
-        // Linha alta/baixa do técnico desloca o bloco inteiro e fica visível no campo.
         if(!pl.isKeeper)ty += dir * ((tac.lineHeight||58)-58) * 0.11;
 
-        // Formação continua reconhecível: a posição original puxa o alvo de volta.
         const anchorWeight = attacking ? 0.34 : 0.48;
         tx = lerp(tx, pl.baseX, anchorWeight);
         ty = lerp(ty, pl.baseY, anchorWeight * 0.50);
 
         if (attacking) {
           if (pl === carrier) {
-            // Portador progride sem atravessar o campo sozinho.
             const advance = (M.carrierAdvance || 2.2) + (a.dribbling || 70) / 100 * 1.4;
             tx = clamp(ballX + (tx - ballX) * 0.16, 2, F.width - 2);
             ty = clamp(ballY + dir * advance, 3, F.length - 3);
@@ -174,19 +170,16 @@
             const support = (a.passing || 70) / 100;
 
             if (['VOL', 'MC', 'MEI'].includes(pl.position) && distBall < 24) {
-              // Triângulos de apoio ao portador.
               tx += (ballX - tx) * (0.18 + support * 0.10);
               ty += (ballY - ty) * 0.14;
             }
 
             if (['CA', 'SA', 'PE', 'PD'].includes(pl.position)) {
-              // Infiltrações só quando a bola tem condições de progredir.
               const laneBoost = phase === 'transition_attack' ? 8 : 3.5;
               ty += dir * laneBoost * ((a.pace || 70) / 100);
             }
 
             if (['LD', 'LE', 'ALA'].includes(pl.position)) {
-              // Laterais dão amplitude com posse, mas não sobem todos ao mesmo tempo.
               const isBallSide = Math.abs(pl.baseX - ballX) < F.width * 0.34;
               if (isBallSide) ty += dir * 5.5;
               else ty -= dir * 1.5;
@@ -195,18 +188,15 @@
         } else {
           const presser = pressers.find(x => x.p === pl);
           if (presser && carrier) {
-            // Pressão: aproxima sem colar exatamente no portador.
             const dx = pl.x - carrier.x, dy = pl.y - carrier.y;
             const d = Math.hypot(dx, dy) || 1;
             tx = carrier.x + dx / d * 1.6;
             ty = carrier.y + dy / d * 1.6;
           } else {
-            // Bloco defensivo se move junto com a bola.
             const compact = M.compactness || 0.72;
             tx = lerp(tx, ballX, 0.10 + tac.pressing / 100 * 0.09);
             ty = lerp(ty, ballY, 0.06 + tac.pressing / 100 * 0.05);
 
-            // Cobertura do adversário mais próximo, sem abandonar a zona.
             const nearby = nearestPlayers(pl, oppPlayers.filter(p => !p.isKeeper), 1)[0];
             if (nearby && nearby.d < 13) {
               tx = lerp(tx, nearby.p.x, 0.13 * compact);
@@ -214,19 +204,18 @@
             }
           }
 
-          // Transição defensiva = corrida clara de volta para trás da bola.
           if (phase === 'transition_defend' && !pl.isKeeper) {
             const recoveryY = ballY - dir * 7;
             ty = lerp(ty, recoveryY, 0.42);
           }
         }
 
-        // Goleiro acompanha lateralmente e sai um pouco mais se for sweeper keeper.
         if (pl.isKeeper) {
           const sweep = pdata?.profileStyle === 'sweeper_keeper' ? 8.5 : 5.2;
-          tx = clamp(F.width / 2 + (ballX - F.width / 2) * 0.15, F.width / 2 - 6, F.width / 2 + 6);
+          const halfGoal=Math.max(2.8,F.goalWidth/2-.35);
+          tx = clamp(F.width / 2 + (ballX - F.width / 2) * 0.13, F.width / 2 - halfGoal, F.width / 2 + halfGoal);
           const ownY=ownGoalY(key), d=attackDir(key);
-          ty = clamp(ownY + d*(sweep + Math.abs(ballY-ownY)*0.035), 2.3, F.length-2.3);
+          ty = clamp(ownY + d*(sweep + Math.abs(ballY-ownY)*0.035), 1.4, F.length-1.4);
         }
 
         pl.tx = clamp(tx, 1.5, F.width - 1.5);
@@ -243,10 +232,27 @@
     }
   }
 
+  function resolveCrowding(scene){
+    for(const key of ['A','B']){
+      const list=scene.players.filter(p=>p.key===key);
+      for(let i=0;i<list.length;i++)for(let j=i+1;j<list.length;j++){
+        const a=list[i],b=list[j];let dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);
+        if(d>=1.55)continue;
+        if(d<.001){dx=(i%2?1:-1)*.01;dy=.01;d=Math.hypot(dx,dy);}
+        const overlap=1.55-d,ux=dx/d,uy=dy/d;
+        const aProtected=a===scene.carrier||a.isKeeper,bProtected=b===scene.carrier||b.isKeeper;
+        const wa=aProtected?.18:(bProtected?.82:.5),wb=bProtected?.18:(aProtected?.82:.5);
+        a.x=clamp(a.x-ux*overlap*wa,1.2,F.width-1.2);a.y=clamp(a.y-uy*overlap*wa,1.2,F.length-1.2);
+        b.x=clamp(b.x+ux*overlap*wb,1.2,F.width-1.2);b.y=clamp(b.y+uy*overlap*wb,1.2,F.length-1.2);
+      }
+    }
+  }
+
   function update(scene, state, dt) {
     if (!scene || scene.preview) return;
     computeTargets(scene, state, dt);
     for (const pl of scene.players) steering(pl, dt);
+    resolveCrowding(scene);
   }
 
   Prime.MovementAI = Object.freeze({
