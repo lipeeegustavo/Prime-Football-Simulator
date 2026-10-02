@@ -1,0 +1,104 @@
+name: apply v28 match emotion
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-v28-emotion.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Patch match balance and behavior
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p=Path(path)
+              text=p.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'pattern not found in {path}: {old[:120]!r}')
+              p.write_text(text.replace(old,new,1),encoding='utf-8')
+
+          # More match events without turning the game into an arcade.
+          replace('js/config/balance.js', 'foulChance: 0.06,', 'foulChance: 0.085,')
+
+          # More believable scoring chance. Physical validation still decides whether the ball really crossed the line.
+          replace('js/simulation/matchEngine.js',
+            "const goal=Math.max(.008,Math.min(.31,(.105+x*.0052)*distanceFactor*angleFactor));\n    const save=Math.max(.20,Math.min(.68,.46-x*.003+(1-distanceFactor)*.09));",
+            "const goal=Math.max(.012,Math.min(.42,(.165+x*.0058)*distanceFactor*angleFactor));\n    const save=Math.max(.18,Math.min(.62,.42-x*.003+(1-distanceFactor)*.075));")
+
+          # Cards: more yellows, but remove the old excessive direct-red rate.
+          replace('js/simulation/matchEngine.js',
+            "if(n<.035){card='RED_CARD';directRed=true;cardReason=pickFoulReason(m,'red');}\n    else if(n<.29)card='YELLOW_CARD';",
+            "if(n<.006){card='RED_CARD';directRed=true;cardReason=pickFoulReason(m,'red');}\n    else if(n<.37)card='YELLOW_CARD';")
+
+          # Prefer the teammate physically closest to a genuinely loose ball.
+          marker="""  function chooseCarrier(state,key,r){\n    const list=outfield(state,key);\n    return weightedPick(list,p=>(attrs(p).dribbling||70)+(attrs(p).passing||70)*.5+(p.group==='ATA'?15:0),r);\n  }\n"""
+          insert="""  function chooseCarrier(state,key,r){\n    const list=outfield(state,key);\n    return weightedPick(list,p=>(attrs(p).dribbling||70)+(attrs(p).passing||70)*.5+(p.group==='ATA'?15:0),r);\n  }\n  function nearestLooseBallPlayer(state,key){\n    const scene=Prime.Pitch?.getScene?.(),m=state.match,b=scene?.ball;\n    if(!scene||!m||!b||b.state!=='dead'||m.stoppageWindow||scene.action)return null;\n    const sent=new Set((m.sentOff?.[key]||[]).map(String));\n    const list=(scene.players||[]).filter(p=>p.key===key&&!p.isKeeper&&!sent.has(String(p.id)));\n    if(!list.length)return null;\n    return list.map(p=>({p,d:Math.hypot(p.x-b.x,p.y-b.y)})).sort((a,b)=>a.d-b.d)[0]||null;\n  }\n"""
+          replace('js/simulation/matchEngine.js', marker, insert)
+
+          replace('js/simulation/matchEngine.js',
+            "let carrier=playerById(m.carrierId);\n    if(!carrier||carrier.group==='GOL')carrier=chooseCarrier(state,atk,r);\n    if(!carrier)return;\n    m.carrierId=carrier.id;",
+            "let carrier=playerById(m.carrierId);\n    if(!carrier||carrier.group==='GOL')carrier=chooseCarrier(state,atk,r);\n    const loose=nearestLooseBallPlayer(state,atk);\n    const currentLive=carrier?livePlayer(atk,carrier.id):null;\n    if(loose&&(!currentLive||loose.d+2.2<Math.hypot(currentLive.x-Prime.Pitch.getBall().x,currentLive.y-Prime.Pitch.getBall().y)))carrier=playerById(loose.p.id)||carrier;\n    if(!carrier)return;\n    m.carrierId=carrier.id;")
+
+          # Number 9 / striker in a good shooting lane should attack the goal much more often.
+          replace('js/simulation/matchEngine.js',
+            "if(actions>=7)shootBias+=.045;\n    if(minute>75)shootBias+=.012;\n    shootBias=Math.min(.38,shootBias*(evCfg.shotBoost||1.75));",
+            "if(actions>=7)shootBias+=.045;\n    if(minute>75)shootBias+=.012;\n    const liveCarrier=livePlayer(atk,carrier.id),goalY=attacksTop(atk,state)?0:Prime.FieldGeometry.FIELD.length;\n    const distanceToGoal=liveCarrier?Math.hypot(liveCarrier.x-Prime.FieldGeometry.FIELD.width/2,liveCarrier.y-goalY):99;\n    const isStriker=carrier.positions.includes('CA')||carrier.positions.includes('SA');\n    shootBias=Math.min(.50,shootBias*(evCfg.shotBoost||1.75));\n    if(isStriker&&phase==='FINAL_THIRD'&&distanceToGoal<30)shootBias=Math.max(shootBias,.58);\n    if(isStriker&&distanceToGoal<20)shootBias=Math.max(shootBias,.72);")
+
+          # Add through balls when a runner is ahead in progression/final third.
+          replace('js/simulation/matchEngine.js',
+            "const cross=phase==='FINAL_THIRD'&&wide&&targetStriker&&r()<.42;\n    const evt={type:cross?'CROSS':'PASS',team:atk,fromId:carrier.id,toId:receiver.id,minute};",
+            "const cross=phase==='FINAL_THIRD'&&wide&&targetStriker&&r()<.42;\n    const fromLive=livePlayer(atk,carrier.id),toLive=livePlayer(atk,receiver.id),dir=attackDirection(atk,state);\n    const forwardGain=fromLive&&toLive?(toLive.y-fromLive.y)*dir:0;\n    const throughBall=!cross&&phase!=='BUILDUP'&&forwardGain>5&&targetStriker&&r()<(phase==='FINAL_THIRD'?.34:.22);\n    const evt={type:cross?'CROSS':'PASS',team:atk,fromId:carrier.id,toId:receiver.id,minute,throughBall};")
+
+          replace('js/simulation/matchEngine.js',
+            "case'PASS':text=`${evt.minute}' — ${p(evt.fromId)} toca para ${p(evt.toId)}.`;break;",
+            "case'PASS':text=evt.throughBall?`${evt.minute}' — ${p(evt.fromId)} enfia a bola para ${p(evt.toId)}!`:`${evt.minute}' — ${p(evt.fromId)} toca para ${p(evt.toId)}.`;break;")
+
+          # Renderer: give through balls extra lead and pace.
+          replace('js/render/pitchRenderer.js',
+            "speed:evt.speed||B.ball?.passSpeed||18,ballState:evt.type==='CROSS'?'cross':'pass',loft:evt.type==='CROSS'?(B.ball?.crossLoft||.42):(evt.loft||0),spin:evt.type==='CROSS'?((to.x<from.x?-1:1)*(B.ball?.curveSpin||7.5)*.35):(evt.spin||0),leadSeconds:evt.type==='CROSS'?.36:.20",
+            "speed:evt.speed||(evt.throughBall?(B.ball?.longPassSpeed||27.5):(B.ball?.passSpeed||18)),ballState:evt.type==='CROSS'?'cross':'pass',loft:evt.type==='CROSS'?(B.ball?.crossLoft||.42):(evt.loft||0),spin:evt.type==='CROSS'?((to.x<from.x?-1:1)*(B.ball?.curveSpin||7.5)*.35):(evt.spin||0),leadSeconds:evt.throughBall?.58:(evt.type==='CROSS'?.36:.20)")
+
+          # Core pass wrapper must preserve the through-ball flag and speed profile.
+          replace('js/runtime/coreStabilityV24.js',
+            "const speed=cross?clamp(23+dist*.22,24,33):clamp(17+dist*.42,18,32);",
+            "const through=Boolean(evt.throughBall);\n    const speed=cross?clamp(23+dist*.22,24,33):through?clamp(24+dist*.34,25,35):clamp(17+dist*.42,18,32);")
+
+          # Legitimate close-range goals were being rejected too aggressively by the physical validator.
+          replace('js/runtime/coreStabilityV24.js',
+            "const acceptance=clamp(.18+.82*distFactor*angleFactor*(.58+.28*fin+.14*pos),.08,.98);",
+            "const acceptance=clamp(.34+.66*distFactor*angleFactor*(.62+.25*fin+.13*pos),.18,.995);")
+
+          # Movement: closest teammate attacks a free ball at recovery speed instead of waiting for a scripted player.
+          replace('js/world/movementAI.js',
+            "const teams = {\n      A: scene.players.filter(p => p.key === 'A'),\n      B: scene.players.filter(p => p.key === 'B')\n    };",
+            "const teams = {\n      A: scene.players.filter(p => p.key === 'A'),\n      B: scene.players.filter(p => p.key === 'B')\n    };\n    const looseBall=ball.state==='dead'&&!scene.action&&!state.match?.stoppageWindow;\n    const looseChaser=looseBall?nearestPlayers(ball,scene.players.filter(p=>!p.isKeeper),1)[0]?.p:null;")
+
+          replace('js/world/movementAI.js',
+            "if (pl.isKeeper) {",
+            "if(looseChaser===pl){tx=ballX;ty=ballY;}\n\n        if (pl.isKeeper) {")
+
+          replace('js/world/movementAI.js',
+            "if (phase === 'transition_defend') speedBoost = (M.recoveryBoost || 1.13)*(0.96+Math.min(.12,(tac.pressing||60)*.0015));",
+            "if (phase === 'transition_defend') speedBoost = (M.recoveryBoost || 1.13)*(0.96+Math.min(.12,(tac.pressing||60)*.0015));\n        if(looseChaser===pl)speedBoost=Math.max(speedBoost,1.32);")
+
+      - name: Syntax check
+        run: |
+          node --check js/config/balance.js
+          node --check js/simulation/matchEngine.js
+          node --check js/render/pitchRenderer.js
+          node --check js/runtime/coreStabilityV24.js
+          node --check js/world/movementAI.js
+      - name: Commit v28
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add js/config/balance.js js/simulation/matchEngine.js js/render/pitchRenderer.js js/runtime/coreStabilityV24.js js/world/movementAI.js
+          git commit -m "feat: add match emotion, striker decisions and loose-ball recovery"
+          git push origin main
