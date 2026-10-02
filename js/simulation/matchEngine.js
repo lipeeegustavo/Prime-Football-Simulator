@@ -97,13 +97,17 @@
     const m=state.match;
     if(!m||m.finished||m.visualBusy||!m.visualQueue.length)return;
     const item=m.visualQueue.shift();
-    m.visualBusy=true;
-    Prime.Pitch.playEvent(item.evt,(result)=>{
+    m.visualBusy=true;m.visualBusyElapsed=0;m.activeVisual=item;
+    let completed=false;
+    const finish=(result)=>{
+      if(completed)return;completed=true;
       if(!state.match||state.match!==m)return;
-      m.visualBusy=false;
+      m.visualBusy=false;m.visualBusyElapsed=0;m.activeVisual=null;m.forceVisualDone=null;
       if(item.onDone)item.onDone(result||{});
       pumpVisual(state);
-    });
+    };
+    m.forceVisualDone=finish;
+    try{Prime.Pitch.playEvent(item.evt,finish);}catch(error){finish({error:true,message:error?.message||'visual error'});}
   }
   function flushVisuals(state){
     const m=state.match;if(!m)return;
@@ -321,8 +325,15 @@
         }else{
           const nowMinute=Math.floor(m.gameSeconds/60);
           if(r()<.28){
-            m.stats.corners[atk]++;logEvent(state,{type:'CORNER',team:atk,minute:nowMinute});
-            m.poss=atk;const c=chooseCarrier(state,atk,r);m.carrierId=c?.id||null;m.possessionActions=Math.max(2,m.possessionActions);m.attackPhase='FINAL_THIRD';if(c)visualRestart(atk,c.id,'corner');
+            const cornerEvt={type:'CORNER',team:atk,minute:nowMinute,physicalOut:true};
+            m.stats.corners[atk]++;logEvent(state,cornerEvt);
+            m.poss=atk;m.possessionActions=Math.max(2,m.possessionActions);m.attackPhase='FINAL_THIRD';
+            queueVisual(state,cornerEvt,(cornerRes)=>{
+              if(state.match!==m||m.finished)return;
+              const rid=cornerRes?.receiverId||chooseCarrier(state,atk,r)?.id||null;
+              m.poss=atk;m.carrierId=rid;m.possessionActions=Math.max(2,m.possessionActions);m.attackPhase='FINAL_THIRD';
+              if(rid&&!cornerRes?.receiverId)Prime.Pitch.setCarrier(atk,rid);
+            });
           }else{
             logEvent(state,{type:'GOAL_KICK',team:def,minute:nowMinute});
             m.poss=def;m.carrierId=keeper(state,def)?.id;m.possessionActions=0;m.attackPhase='BUILDUP';visualRestart(def,m.carrierId,'goal-kick');
@@ -372,15 +383,16 @@
       const seed=state.settings.seed||'PRIME-001';
       const speed=[1,2,4].includes(Number(state.settings.speedFactor))?Number(state.settings.speedFactor):1;
       const seedHash=Rng.hashString(seed);
-      const firstHalfStoppage=1+(seedHash%10);
-      const secondHalfStoppage=1+((seedHash>>>8)%10);
+      const stoppageRng=Rng.createSeededRng(`${seed}|STOPPAGE`);
+      const firstHalfStoppage=1+Math.floor(stoppageRng()*10);
+      const secondHalfStoppage=1+Math.floor(stoppageRng()*10);
       const match={
         minute:0,gameSeconds:0,score:{A:0,B:0},paused:false,rng:Rng.createSeededRng(seed),poss:'A',finished:false,
         subs:{A:0,B:0},subbedOut:{A:[],B:[]},events:[],shootout:null,halfEmitted:false,waitingHalfTime:false,secondHalf:false,speedFactor:speed,
         cards:{A:{},B:{}},sentOff:{A:[],B:[]},stoppageWindow:false,pendingPenalty:null,
         firstHalfStoppage,secondHalfStoppage,firstHalfStoppageAnnounced:false,secondHalfStoppageAnnounced:false,
         realMatchSeconds:Number(state.settings.realMatchSeconds)||180,
-        nextEventAt:16+seedHash%24,visualQueue:[],visualBusy:false,maxVisualQueue:0,
+        nextEventAt:16+seedHash%24,visualQueue:[],visualBusy:false,visualBusyElapsed:0,activeVisual:null,forceVisualDone:null,maxVisualQueue:0,
         carrierId:null,possessionActions:0,attackPhase:'BUILDUP',
         fullTimeRequested:false,fullTimeWait:0,stamina:{A:1,B:1},
         initialTeams,stats:Prime.MatchRules?.initialStats?Prime.MatchRules.initialStats():{possession:{A:0,B:0},shots:{A:0,B:0},onTarget:{A:0,B:0},passes:{A:0,B:0},tackles:{A:0,B:0},corners:{A:0,B:0},throwIns:{A:0,B:0},fouls:{A:0,B:0},yellow:{A:0,B:0},red:{A:0,B:0},saves:{A:0,B:0}}
@@ -393,7 +405,7 @@
       update(state);
       Prime.GameLoop.start({
         update:(scaledDt,rawDt)=>step(state,scaledDt,rawDt),
-        render:(scaledDt,rawDt)=>{Prime.Pitch.frame(scaledDt);hooks.onFrame&&hooks.onFrame(state,rawDt);}
+        render:(scaledDt,rawDt)=>{Prime.Pitch.frame(scaledDt,rawDt);hooks.onFrame&&hooks.onFrame(state,rawDt);}
       });
       Prime.GameLoop.setSpeed(speed);
       return {ok:true};
@@ -409,11 +421,20 @@
 
   function step(state,dt,rawDt){
     const m=state.match;if(!m||m.finished||m.paused)return;
+    if(m.visualBusy){
+      m.visualBusyElapsed=(m.visualBusyElapsed||0)+(rawDt||dt||0);
+      if(m.visualBusyElapsed>6.5&&typeof m.forceVisualDone==='function'){
+        const rescue=m.forceVisualDone;
+        try{Prime.Pitch?.cancelAction?.();}catch(_e){}
+        if(m.visualBusy)rescue({watchdog:true});
+      }
+    }
     const compression=TOTAL/Math.max(45,m.realMatchSeconds);
     const firstHalfEnd=FIRST_HALF_BASE+(m.firstHalfStoppage||1)*60;
     const fullTimeEnd=TOTAL+(m.secondHalfStoppage||1)*60;
     if(!m.fullTimeRequested){
-      const gameDelta=dt*compression;
+      const visualClockScale=(m.visualBusy||Prime.Pitch?.isActionActive?.()) ? .30 : 1;
+      const gameDelta=dt*compression*visualClockScale;
       const periodEnd=m.secondHalf?fullTimeEnd:firstHalfEnd;
       m.gameSeconds=Math.min(periodEnd,m.gameSeconds+gameDelta);
       m.minute=Math.floor(m.gameSeconds/60);

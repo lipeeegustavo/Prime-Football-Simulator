@@ -112,7 +112,6 @@
     function finish(result,asOut){
       if(finished)return;finished=true;s.v24ShotActive=false;
       done&&done(result||{});
-      if(asOut)normalizeShotOut(s,evt,before,result||{});
     }
     function tick(){
       if(finished)return;

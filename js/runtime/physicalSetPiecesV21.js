@@ -29,8 +29,8 @@
   function movePlayer(player,x,y,duration,done){
     if(!player){done&&done();return;}
     const sx=player.x,sy=player.y,dist=Math.hypot(x-sx,y-sy);
-    const walkingMs=dist/5.4*1000;
-    const ms=Math.max(320,Math.min(2400,duration||walkingMs));
+    const walkingMs=dist/7.8*1000;
+    const ms=Math.max(280,Math.min(1650,duration||walkingMs));
     const start=performance.now();
     function tick(now){
       const q=clamp((now-start)/ms,0,1),e=q*q*(3-2*q);player.x=sx+(x-sx)*e;player.y=sy+(y-sy)*e;player.tx=player.x;player.ty=player.y;
@@ -83,18 +83,43 @@
       });
     });
   }
+  function other(key){return key==='A'?'B':'A';}
+  function moveGroup(moves,duration,done){
+    if(!moves.length){done&&done();return;}
+    const start=performance.now(),ms=Math.max(360,Number(duration)||720);
+    const snapshots=moves.map(m=>({p:m.p,sx:m.p.x,sy:m.p.y,x:m.x,y:m.y}));
+    function tick(now){
+      const q=clamp((now-start)/ms,0,1),e=q*q*(3-2*q);
+      snapshots.forEach(m=>{m.p.x=m.sx+(m.x-m.sx)*e;m.p.y=m.sy+(m.y-m.sy)*e;m.p.tx=m.p.x;m.p.ty=m.p.y;});
+      if(q<1)requestAnimationFrame(tick);else done&&done();
+    }
+    requestAnimationFrame(tick);
+  }
   function corner(evt,done){
     const s=scene();if(!s?.ball){done&&done({setPiece:false});return;}
-    const top=attacksTop(evt.team,s),goalY=top?0:F.length;
+    const top=attacksTop(evt.team,s),goalY=top?0:F.length,defKey=other(evt.team);
     const side=evt.side||((s.ball.x<F.width/2)?'left':'right'),cornerX=side==='left'?0:F.width;
-    const kicker=nearest(players(evt.team),cornerX,goalY);if(!kicker){done&&done({setPiece:false});return;}
-    const targets=players(evt.team).filter(p=>p!==kicker),target=nearest(targets,F.width/2,top?F.penaltyAreaDepth*.72:F.length-F.penaltyAreaDepth*.72)||kicker;
-    s.ball.x=cornerX;s.ball.y=goalY;s.ball.z=0;s.ball.state='dead';s.ball.vx=s.ball.vy=s.ball.vz=0;s.carrier=null;
-    movePlayer(kicker,side==='left'?1:F.width-1,top?1:F.length-1,null,()=>{
-      const tx=clamp(target.x,5,F.width-5),ty=clamp(target.y,4,F.length-4);
-      releaseFrom(null,tx,ty,25.5,.68,side==='left'?3.8:-3.8);
-      waitUntil(()=>Math.hypot(s.ball.x-target.x,s.ball.y-target.y)<2.2||(s.ball.state==='dead'&&s.ball.z===0),2400,()=>{
-        settleToReceiver(s,target,done,{setPiece:true,kind:'corner'});
+    const atk=players(evt.team),defs=players(defKey),kicker=nearest(atk,cornerX,goalY);
+    if(!kicker){done&&done({setPiece:false});return;}
+    const attackers=atk.filter(p=>p!==kicker),keeper=(s.players||[]).find(p=>p.key===defKey&&p.isKeeper)||null;
+    const mirrorY=y=>top?y:F.length-y;
+    const xs=[F.width*.36,F.width*.47,F.width*.57,F.width*.66,F.width*.43,F.width*.61];
+    const ys=[7.2,9.2,11.5,13.8,15.8,17.0],moves=[];
+    attackers.slice(0,6).forEach((p,i)=>moves.push({p,x:xs[i],y:mirrorY(ys[i])}));
+    defs.filter(p=>!p.isKeeper).slice(0,6).forEach((p,i)=>moves.push({p,x:clamp(xs[i]+(i%2?1.4:-1.4),3,F.width-3),y:mirrorY(Math.max(4.8,ys[i]-1.5))}));
+    if(keeper)moves.push({p:keeper,x:F.width/2,y:top?.75:F.length-.75});
+    moves.push({p:kicker,x:side==='left'?.8:F.width-.8,y:top?.8:F.length-.8});
+    s.ball.x=cornerX;s.ball.y=goalY;s.ball.z=0;s.ball.state='dead';s.ball.vx=s.ball.vy=s.ball.vz=0;s.carrier=null;s.target=null;
+    moveGroup(moves,760,()=>{
+      const seed=`${s.state?.settings?.seed||'PRIME'}|CORNER|${Math.floor(s.state?.match?.gameSeconds||0)}|${evt.team}|${side}`;
+      const idx=(Prime.Rng?.hashString?Prime.Rng.hashString(seed):0)%Math.max(1,Math.min(5,attackers.length));
+      const target=attackers[idx]||nearest(attackers,F.width/2,mirrorY(10))||kicker;
+      if(target){target.targeted=true;target.actionState='receive';target.actionTime=.9;}
+      const targetX=clamp(target?.x||F.width/2,4,F.width-4),targetY=clamp(target?.y||mirrorY(10.5),3,F.length-3);
+      s.ball.x=cornerX;s.ball.y=goalY;s.ball.z=.15;
+      releaseFrom(null,targetX,targetY,27.5,.58,side==='left'?4.2:-4.2);
+      waitUntil(()=>Math.hypot(s.ball.x-targetX,s.ball.y-targetY)<2.4||(s.ball.state==='dead'&&s.ball.z===0),2300,()=>{
+        settleToReceiver(s,target,done,{setPiece:true,kind:'corner',receiverId:String(target?.id||'')});
       });
     });
   }
