@@ -113,11 +113,8 @@
     if(ball.z<.015)ball.z=0;
   }
 
-  function update(ball,dt){
-    if(!ball||dt<=0)return;
-    dt=Math.min(.05,dt);
+  function integrate(ball,dt){
     if(ball.returnDelay>0)ball.returnDelay=Math.max(0,ball.returnDelay-dt);
-    if(Prime.PhysicsBridge&&Prime.PhysicsBridge.isReady&&Prime.PhysicsBridge.isReady()){Prime.PhysicsBridge.step(ball,dt);return;}
 
     if(ball.state==='controlled'&&ball.targetX!=null&&ball.targetY!=null){
       controlledUpdate(ball,dt);
@@ -153,6 +150,18 @@
 
     if(ball.state!=='controlled'&&ball.z===0&&Math.abs(ball.vz)<.01&&Math.hypot(ball.vx,ball.vy)<CONFIG.stopSpeed){
       ball.vx=0;ball.vy=0;ball.vz=0;ball.spin=0;ball.state='dead';
+    }
+  }
+
+  function update(ball,dt){
+    if(!ball||dt<=0)return;
+    const maxStep=Math.max(.008,Math.min(.05,Number(Prime.Balance?.ball?.maxPhysicsStep)||.02));
+    let remaining=Math.min(.24,Math.max(0,dt));
+    while(remaining>1e-7){
+      const step=Math.min(maxStep,remaining);
+      if(Prime.PhysicsBridge&&Prime.PhysicsBridge.isReady&&Prime.PhysicsBridge.isReady())Prime.PhysicsBridge.step(ball,step);
+      else integrate(ball,step);
+      remaining-=step;
     }
   }
 
