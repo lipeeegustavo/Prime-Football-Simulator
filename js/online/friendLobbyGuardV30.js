@@ -4,6 +4,7 @@
   const TURN_SECONDS=30;
   const WAITING_DEADLINE=Number.MAX_SAFE_INTEGER;
   let lastConnected=false;
+  let lastReady=false;
   let lastRoom=null;
 
   function getRoom(){
@@ -14,66 +15,79 @@
     return Boolean(room&&!room.complete&&room.turn&&room.phase);
   }
 
-  function freezeUntilGuest(room){
-    if(!isDraftActive(room)||room.connected?.B)return;
+  function setupReady(room){
+    return Boolean(room?.v31Setup?.started);
+  }
+
+  function gateOpen(room){
+    return Boolean(room?.connected?.B&&setupReady(room));
+  }
+
+  function freezeDraft(room){
+    if(!isDraftActive(room)||gateOpen(room))return;
     room.deadline=WAITING_DEADLINE;
   }
 
   function resumeWithFreshTurn(room){
-    if(!isDraftActive(room)||!room.connected?.B)return;
+    if(!isDraftActive(room)||!gateOpen(room))return;
     if(room.deadline===WAITING_DEADLINE||!Number.isFinite(room.deadline)||room.deadline<=0){
       room.deadline=Date.now()+TURN_SECONDS*1000;
     }
   }
 
   function updateWaitingUi(room){
-    if(!isDraftActive(room)||room.connected?.B)return;
+    if(!isDraftActive(room)||gateOpen(room))return;
 
     const timerText=document.getElementById('friendTimerText');
     const timerBar=document.getElementById('friendTimerBar');
     const search=document.getElementById('friendSearch');
     const pickHead=document.querySelector('.friend-pick-head .eyebrow');
     const pickTitle=document.querySelector('.friend-pick-head h3');
+    const connected=Boolean(room.connected?.B);
 
-    if(timerText)timerText.textContent='AGUARDANDO';
+    if(timerText)timerText.textContent=connected?'CONFIGURAÇÃO':'AGUARDANDO';
     if(timerBar)timerBar.style.width='100%';
     if(search)search.disabled=true;
     document.querySelectorAll('.friend-candidate').forEach(button=>{button.disabled=true;});
-    if(pickHead)pickHead.textContent='Aguardando jogador 2';
-    if(pickTitle)pickTitle.textContent='O draft começa quando seu amigo entrar na sala.';
+    if(pickHead)pickHead.textContent=connected?'Configure os times':'Aguardando jogador 2';
+    if(pickTitle)pickTitle.textContent=connected?'O draft começa depois que os dois confirmarem nome e formação.':'O draft começa quando seu amigo entrar na sala.';
   }
 
   function enforceLobbyGate(){
     const room=getRoom();
-    if(!room){lastRoom=null;lastConnected=false;return;}
+    if(!room){lastRoom=null;lastConnected=false;lastReady=false;return;}
 
     const connected=Boolean(room.connected?.B);
+    const ready=gateOpen(room);
     if(room!==lastRoom){
       lastRoom=room;
       lastConnected=connected;
+      lastReady=ready;
     }
 
-    if(!connected){
-      freezeUntilGuest(room);
+    if(!ready){
+      freezeDraft(room);
       updateWaitingUi(room);
-    }else if(!lastConnected){
-      resumeWithFreshTurn(room);
-      Prime.UI?.showToast?.('Amigo conectado. O cronômetro começou agora.','success','Jogo online');
+    }else if(!lastReady){
+      room.deadline=Date.now()+TURN_SECONDS*1000;
+      Prime.UI?.showToast?.('Os dois times estão configurados. O cronômetro do draft começou.','success','Jogo online');
     }else{
       resumeWithFreshTurn(room);
     }
 
     lastConnected=connected;
+    lastReady=ready;
   }
 
   document.addEventListener('click',event=>{
     const candidate=event.target.closest?.('.friend-candidate');
     if(!candidate)return;
     const room=getRoom();
-    if(!room||room.connected?.B)return;
+    if(!room||gateOpen(room))return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    Prime.UI?.showToast?.('Espere o segundo jogador entrar para começar o draft.','error','Aguardando amigo');
+    const msg=room.connected?.B?'Confirme a configuração dos dois times antes de começar o draft.':'Espere o segundo jogador entrar para começar o draft.';
+    Prime.UI?.showToast?.(msg,'error','Jogo online');
   },true);
 
   const observer=new MutationObserver(enforceLobbyGate);
