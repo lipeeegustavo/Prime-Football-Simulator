@@ -55,11 +55,19 @@
   }
   function decideOutcome(state,atk,shooter,r){
     const def=atk==='A'?'B':'A',gk=keeper(state,def),a=attrs(shooter),ga=attrs(gk),coach=tactics(state,atk),defCoach=tactics(state,def);
+    const live=livePlayer(atk,shooter.id),F=Prime.FieldGeometry.FIELD,mouth=Prime.FieldGeometry.goalMouthX(),top=attacksTop(atk,state),goalY=top?0:F.length;
+    const sx=live?.x??F.width/2,sy=live?.y??F.length/2;
+    const distance=Math.hypot(sx-F.width/2,sy-goalY);
+    const va={x:mouth.left-sx,y:goalY-sy},vb={x:mouth.right-sx,y:goalY-sy};
+    const la=Math.hypot(va.x,va.y)||1,lb=Math.hypot(vb.x,vb.y)||1;
+    const angle=Math.acos(Math.max(-1,Math.min(1,(va.x*vb.x+va.y*vb.y)/(la*lb))));
+    const distanceFactor=Math.max(.05,Math.min(1,1-(distance-10)/52));
+    const angleFactor=Math.max(.12,Math.min(1,angle/.52));
     const quality=(a.finishing||70)*.46+(a.positioning||70)*.22+(a.dribbling||70)*.08+coach.passRisk*.05;
     const resistance=(ga.goalkeeping||gk?.overall||75)*.5+(ga.positioning||75)*.18+defCoach.pressing*.05;
     const x=quality-resistance;
-    const goal=Math.max(.05,Math.min(.24,.11+x*.0055));
-    const save=Math.max(.25,Math.min(.61,.45-x*.003));
+    const goal=Math.max(.008,Math.min(.31,(.105+x*.0052)*distanceFactor*angleFactor));
+    const save=Math.max(.20,Math.min(.68,.46-x*.003+(1-distanceFactor)*.09));
     const n=r();
     if(n<goal)return'GOAL';
     if(n<goal+save)return'SAVE';
@@ -243,20 +251,20 @@
     const evCfg=Prime.Balance?.event||{};
 
     // Bola parada e saídas de campo dão ritmo e variedade à partida.
-    if(r()<(evCfg.foulChance||0.09)){
+    if(r()<(evCfg.foulChance ?? 0.09)){
       const defender=chooseDefenderNearCarrier(state,def,r),reason=pickFoulReason(m,'normal');
       const evt={type:'FOUL',team:def,playerId:defender?.id,minute,reason};
       m.stats.fouls[def]++;m.stoppageWindow=true;logEvent(state,evt);
       queueVisual(state,evt,()=>{if(state.match!==m||m.finished)return;disciplineAfterFoul(state,def,defender?.id,minute,reason);autoCoachSubs(state,minute,true);});
       return;
     }
-    if(r()<(evCfg.throwInChance||0.115)){
+    if(r()<(evCfg.throwInChance ?? 0)){
       const restartTeam=r()<.72?atk:def;
       m.stats.throwIns[restartTeam]++;m.stoppageWindow=true;logEvent(state,{type:'THROW_IN',team:restartTeam,minute});
       queueVisual(state,{type:'THROW_IN',team:restartTeam,minute},()=>{if(state.match!==m||m.finished)return;m.poss=restartTeam;const c=chooseCarrier(state,restartTeam,r);m.carrierId=c?.id||null;m.possessionActions=0;if(c)visualRestart(restartTeam,c.id,'throw-in');autoCoachSubs(state,minute,true);});
       return;
     }
-    if(phase==='FINAL_THIRD'&&r()<(evCfg.cornerChanceFinalThird||0.055)){
+    if(phase==='FINAL_THIRD'&&r()<(evCfg.cornerChanceFinalThird ?? 0)){
       m.stats.corners[atk]++;m.stoppageWindow=true;logEvent(state,{type:'CORNER',team:atk,minute});
       queueVisual(state,{type:'CORNER',team:atk,minute},()=>{if(state.match!==m||m.finished)return;const c=chooseCarrier(state,atk,r);m.poss=atk;m.carrierId=c?.id||null;m.possessionActions=Math.max(2,m.possessionActions);if(c)visualRestart(atk,c.id,'corner');autoCoachSubs(state,minute,true);});
       return;
@@ -466,9 +474,9 @@
 
   function penaltyChance(player,keeperPlayer){
     const pa=attrs(player),ka=attrs(keeperPlayer);
-    return Math.max(.60,Math.min(.91,.73+((pa.finishing||75)-(ka.goalkeeping||78))*.004));
+    return Math.max(.68,Math.min(.94,.80+((pa.finishing||75)-(ka.goalkeeping||78))*.0035));
   }
-  function penaltyTaker(state,key,index){const ids=state.teams[key].penalties.filter(Boolean);return ids[index%Math.max(1,ids.length)]||state.teams[key].starters.find(Boolean);}
+  function penaltyTaker(state,key,index){const m=state.match,t=state.teams[key],sent=new Set((m.sentOff?.[key]||[]).map(String)),current=new Set((t.starters||[]).filter(Boolean).map(String));const ids=(t.penalties||[]).filter(id=>id&&current.has(String(id))&&!sent.has(String(id)));const fallback=(t.starters||[]).filter(id=>id&&!sent.has(String(id)));const pool=ids.length?ids:fallback;return pool[index%Math.max(1,pool.length)]||null;}
   function startShootout(state){
     const m=state.match;m.shootout={A:0,B:0,kicks:[],index:0,finished:false};m.paused=true;Prime.GameLoop.setPaused(true);
     requestNextPenalty(state);
@@ -476,6 +484,8 @@
   function requestNextPenalty(state){
     const m=state.match,s=m.shootout;if(!m||!s||s.finished)return;
     const idx=s.index,team=idx%2===0?'A':'B',round=Math.floor(idx/2),opp=team==='A'?'B':'A';
+    const aTaken=s.kicks.filter(k=>k.team==='A').length,bTaken=s.kicks.filter(k=>k.team==='B').length;
+    if((aTaken<5||bTaken<5)&&(s.A>s.B+Math.max(0,5-bTaken)||s.B>s.A+Math.max(0,5-aTaken))){s.finished=true;finishAfterShootout(state);return;}
     if(idx>=10){const maxKicks=Prime.Balance?.event?.maxShootoutKicks||30;if(idx%2===0&&s.A!==s.B){s.finished=true;finishAfterShootout(state);return;}if(idx>=maxKicks){if(s.A===s.B){const winner=m.rng()<0.5?'A':'B';s[winner]++;emit(state,`Limite de cobranças atingido: ${state.teams[winner].name} vence o desempate final.`, 'goal','SHOOTOUT_SAFETY',{winner});}s.finished=true;finishAfterShootout(state);return;}}
     const shooterId=penaltyTaker(state,team,round),goalkeeperId=keeper(state,opp)?.id;
     const humanShooter=state.mode==='cpu'?team==='A':false;

@@ -277,7 +277,7 @@
     if(!scene)return null;const t=findPlayerById(teamKey,playerId);if(!t)return null;scene.target=t;t.targeted=true;const opts=options||{},lead=Math.max(0,Math.min(.65,Number(opts.leadSeconds)||0)),tx=Math.max(1,Math.min(F.width-1,t.x+t.vx*lead)),ty=Math.max(1,Math.min(F.length-1,t.y+t.vy*lead));const result=Prime.Ball.kickToward(scene.ball,tx,ty,speed,state||'pass',{loft:opts.loft||0,spin:opts.spin||0});setAnim(t,'receive',.5);return result;
   }
   function startPass(evt,done){
-    const from=findPlayerById(evt.team,evt.playerId)||scene.carrier,to=findPlayerById(evt.team,evt.targetId);if(!from||!to){done&&done({missing:true});return;}
+    const fromId=evt.playerId||evt.fromId,targetId=evt.targetId||evt.toId;const from=findPlayerById(evt.team,fromId)||scene.carrier,to=findPlayerById(evt.team,targetId);if(!from||!to){done&&done({missing:true});return;}
     setCarrier(evt.team,from.id);setTarget(evt.team,to.id);setAnim(from,evt.type==='CROSS'?'cross':'pass',.46);
     scene.action={type:'receive',team:evt.team,fromId:from.id,targetId:to.id,done,elapsed:0,stallElapsed:0,phase:'prep',impactAt:.16,impactDone:false,speed:evt.speed||B.ball?.passSpeed||18,ballState:evt.type==='CROSS'?'cross':'pass',loft:evt.type==='CROSS'?(B.ball?.crossLoft||.42):(evt.loft||0),spin:evt.type==='CROSS'?((to.x<from.x?-1:1)*(B.ball?.curveSpin||7.5)*.35):(evt.spin||0),leadSeconds:evt.type==='CROSS'?.36:.20};
   }
@@ -373,17 +373,9 @@
       if(a.phase==='travel'){
         let crossed=false;if(wasGoal&&G.crossesGoalLine(prev,scene.ball,'top')){scene.netPulseTop=1;crossed=true;}if(wasGoal&&G.crossesGoalLine(prev,scene.ball,'bottom')){scene.netPulseBottom=1;crossed=true;}
         if(crossed){scene.ball.vx=scene.ball.vy=0;scene.ball.state='dead';const cb=a.done;scene.action=null;cb&&cb({goalCrossed:true});return;}
-        if(a.elapsed>1.7){
-          if(a.outcome==='GOAL'){
-            const attacksTop=visualAttacksTop(a.teamKey),goalY=attacksTop?-.45:F.length+.45;
-            Prime.Ball.kickToward(scene.ball,F.width/2,goalY,12,'shot-goal',{loft:0,spin:0});
-            a.phase='force';a.elapsed=0;return;
-          }
-          scene.ball.vx=scene.ball.vy=0;scene.ball.state='dead';const cb=a.done,outcome=a.outcome;scene.action=null;cb&&cb({goalCrossed:false,outcome});return;
+        if(a.elapsed>3.2){
+          scene.ball.vx=scene.ball.vy=scene.ball.vz=0;scene.ball.state='dead';const cb=a.done,outcome=a.outcome;scene.action=null;cb&&cb({goalCrossed:false,outcome,timeout:true});return;
         }
-      }else if(a.phase==='force'){
-        let crossed=false;if(G.crossesGoalLine(prev,scene.ball,'top')){scene.netPulseTop=1;crossed=true;}if(G.crossesGoalLine(prev,scene.ball,'bottom')){scene.netPulseBottom=1;crossed=true;}
-        if(crossed||a.elapsed>.9){scene.ball.vx=scene.ball.vy=scene.ball.vz=0;scene.ball.state='dead';const cb=a.done;scene.action=null;cb&&cb({goalCrossed:true,forcedGoal:true});return;}
       }
     }
   }
