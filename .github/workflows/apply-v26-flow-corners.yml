@@ -1,0 +1,206 @@
+name: apply v26 flow and corner fixes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-v26-flow-corners.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply v26 fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              p = Path(path)
+              s = p.read_text()
+              if old not in s:
+                  raise SystemExit(f'pattern missing: {label}')
+              p.write_text(s.replace(old, new, 1))
+              print('patched:', label)
+
+          # 1) Do not let the renderer rewrite the rules after a physical shot.
+          replace_once(
+              'js/runtime/coreStabilityV24.js',
+              "      done&&done(result||{});\n      if(asOut)normalizeShotOut(s,evt,before,result||{});",
+              "      done&&done(result||{});",
+              'renderer no longer overwrites corner/goal-kick decision'
+          )
+
+          # 2) Raw frame dt reaches renderer/boundary layers.
+          replace_once(
+              'js/simulation/matchEngine.js',
+              "        render:(scaledDt,rawDt)=>{Prime.Pitch.frame(scaledDt);hooks.onFrame&&hooks.onFrame(state,rawDt);}",
+              "        render:(scaledDt,rawDt)=>{Prime.Pitch.frame(scaledDt,rawDt);hooks.onFrame&&hooks.onFrame(state,rawDt);}",
+              'pass raw dt to pitch frame'
+          )
+
+          # 3) Stoppage time remains seeded/reproducible, but uses independent RNG draws.
+          replace_once(
+              'js/simulation/matchEngine.js',
+              "      const seedHash=Rng.hashString(seed);\n      const firstHalfStoppage=1+(seedHash%10);\n      const secondHalfStoppage=1+((seedHash>>>8)%10);",
+              "      const seedHash=Rng.hashString(seed);\n      const stoppageRng=Rng.createSeededRng(`${seed}|STOPPAGE`);\n      const firstHalfStoppage=1+Math.floor(stoppageRng()*10);\n      const secondHalfStoppage=1+Math.floor(stoppageRng()*10);",
+              'independent seeded stoppage draws'
+          )
+
+          # 4) Visual queue watchdog: a bad animation can never freeze the match forever.
+          old_pump = '''  function pumpVisual(state){
+    const m=state.match;
+    if(!m||m.finished||m.visualBusy||!m.visualQueue.length)return;
+    const item=m.visualQueue.shift();
+    m.visualBusy=true;
+    Prime.Pitch.playEvent(item.evt,(result)=>{
+      if(!state.match||state.match!==m)return;
+      m.visualBusy=false;
+      if(item.onDone)item.onDone(result||{});
+      pumpVisual(state);
+    });
+  }'''
+          new_pump = '''  function pumpVisual(state){
+    const m=state.match;
+    if(!m||m.finished||m.visualBusy||!m.visualQueue.length)return;
+    const item=m.visualQueue.shift();
+    m.visualBusy=true;m.visualBusyElapsed=0;m.activeVisual=item;
+    let completed=false;
+    const finish=(result)=>{
+      if(completed)return;completed=true;
+      if(!state.match||state.match!==m)return;
+      m.visualBusy=false;m.visualBusyElapsed=0;m.activeVisual=null;m.forceVisualDone=null;
+      if(item.onDone)item.onDone(result||{});
+      pumpVisual(state);
+    };
+    m.forceVisualDone=finish;
+    try{Prime.Pitch.playEvent(item.evt,finish);}catch(error){finish({error:true,message:error?.message||'visual error'});}
+  }'''
+          replace_once('js/simulation/matchEngine.js', old_pump, new_pump, 'visual queue watchdog hook')
+
+          replace_once(
+              'js/simulation/matchEngine.js',
+              "        nextEventAt:16+seedHash%24,visualQueue:[],visualBusy:false,maxVisualQueue:0,",
+              "        nextEventAt:16+seedHash%24,visualQueue:[],visualBusy:false,visualBusyElapsed:0,activeVisual:null,forceVisualDone:null,maxVisualQueue:0,",
+              'visual watchdog state'
+          )
+
+          replace_once(
+              'js/simulation/matchEngine.js',
+              "    const m=state.match;if(!m||m.finished||m.paused)return;\n    const compression=TOTAL/Math.max(45,m.realMatchSeconds);",
+              "    const m=state.match;if(!m||m.finished||m.paused)return;\n    if(m.visualBusy){\n      m.visualBusyElapsed=(m.visualBusyElapsed||0)+(rawDt||dt||0);\n      if(m.visualBusyElapsed>6.5&&typeof m.forceVisualDone==='function'){\n        const rescue=m.forceVisualDone;\n        try{Prime.Pitch?.cancelAction?.();}catch(_e){}\n        if(m.visualBusy)rescue({watchdog:true});\n      }\n    }\n    const compression=TOTAL/Math.max(45,m.realMatchSeconds);",
+              'recover stalled visual actions'
+          )
+
+          # Slow the game clock while a visible action is being completed. This prevents
+          # the clock from jumping a minute while a player walks 10 m toward a dead ball.
+          replace_once(
+              'js/simulation/matchEngine.js',
+              "      const gameDelta=dt*compression;",
+              "      const visualClockScale=(m.visualBusy||Prime.Pitch?.isActionActive?.())?.30:1;\n      const gameDelta=dt*compression*visualClockScale;",
+              'visual clock pacing'
+          )
+
+          # 5) When an OUT shot becomes a corner, actually animate the corner instead of
+          # logging it and silently restarting possession.
+          old_corner = '''          if(r()<.28){
+            m.stats.corners[atk]++;logEvent(state,{type:'CORNER',team:atk,minute:nowMinute});
+            m.poss=atk;const c=chooseCarrier(state,atk,r);m.carrierId=c?.id||null;m.possessionActions=Math.max(2,m.possessionActions);m.attackPhase='FINAL_THIRD';if(c)visualRestart(atk,c.id,'corner');
+          }else{'''
+          new_corner = '''          if(r()<.28){
+            const cornerEvt={type:'CORNER',team:atk,minute:nowMinute,physicalOut:true};
+            m.stats.corners[atk]++;logEvent(state,cornerEvt);
+            m.poss=atk;m.possessionActions=Math.max(2,m.possessionActions);m.attackPhase='FINAL_THIRD';
+            queueVisual(state,cornerEvt,(cornerRes)=>{
+              if(state.match!==m||m.finished)return;
+              const rid=cornerRes?.receiverId||chooseCarrier(state,atk,r)?.id||null;
+              m.poss=atk;m.carrierId=rid;m.possessionActions=Math.max(2,m.possessionActions);m.attackPhase='FINAL_THIRD';
+              if(rid&&!cornerRes?.receiverId)Prime.Pitch.setCarrier(atk,rid);
+            });
+          }else{'''
+          replace_once('js/simulation/matchEngine.js', old_corner, new_corner, 'animate corners after shots out')
+
+          # 6) Corner choreography: one taker, attackers attack the box, defenders mark,
+          # keeper stays on the line, then a physical cross is delivered.
+          p=Path('js/runtime/physicalSetPiecesV21.js')
+          s=p.read_text()
+          start=s.index('  function corner(evt,done){')
+          end=s.index('  function playEvent(evt,done){', start)
+          new_corner_fn = r'''  function other(key){return key==='A'?'B':'A';}
+  function moveGroup(moves,duration,done){
+    if(!moves.length){done&&done();return;}
+    const start=performance.now(),ms=Math.max(360,Number(duration)||720);
+    const snapshots=moves.map(m=>({p:m.p,sx:m.p.x,sy:m.p.y,x:m.x,y:m.y}));
+    function tick(now){
+      const q=clamp((now-start)/ms,0,1),e=q*q*(3-2*q);
+      snapshots.forEach(m=>{m.p.x=m.sx+(m.x-m.sx)*e;m.p.y=m.sy+(m.y-m.sy)*e;m.p.tx=m.p.x;m.p.ty=m.p.y;});
+      if(q<1)requestAnimationFrame(tick);else done&&done();
+    }
+    requestAnimationFrame(tick);
+  }
+  function corner(evt,done){
+    const s=scene();if(!s?.ball){done&&done({setPiece:false});return;}
+    const top=attacksTop(evt.team,s),goalY=top?0:F.length,defKey=other(evt.team);
+    const side=evt.side||((s.ball.x<F.width/2)?'left':'right'),cornerX=side==='left'?0:F.width;
+    const atk=players(evt.team),defs=players(defKey),kicker=nearest(atk,cornerX,goalY);
+    if(!kicker){done&&done({setPiece:false});return;}
+    const attackers=atk.filter(p=>p!==kicker);
+    const keeper=(s.players||[]).find(p=>p.key===defKey&&p.isKeeper)||null;
+    const mirrorY=y=>top?y:F.length-y;
+    const xs=[F.width*.36,F.width*.47,F.width*.57,F.width*.66,F.width*.43,F.width*.61];
+    const ys=[7.2,9.2,11.5,13.8,15.8,17.0];
+    const moves=[];
+    attackers.slice(0,6).forEach((p,i)=>moves.push({p,x:xs[i],y:mirrorY(ys[i])}));
+    defs.slice(0,6).forEach((p,i)=>moves.push({p,x:clamp(xs[i]+(i%2?1.4:-1.4),3,F.width-3),y:mirrorY(Math.max(4.8,ys[i]-1.5))}));
+    if(keeper)moves.push({p:keeper,x:F.width/2,y:top?.75:F.length-.75});
+    moves.push({p:kicker,x:side==='left'?.8:F.width-.8,y:top?.8:F.length-.8});
+    s.ball.x=cornerX;s.ball.y=goalY;s.ball.z=0;s.ball.state='dead';s.ball.vx=s.ball.vy=s.ball.vz=0;s.carrier=null;s.target=null;
+    moveGroup(moves,760,()=>{
+      const seed=`${s.state?.settings?.seed||'PRIME'}|CORNER|${Math.floor(s.state?.match?.gameSeconds||0)}|${evt.team}|${side}`;
+      const idx=(Prime.Rng?.hashString?Prime.Rng.hashString(seed):0)%Math.max(1,Math.min(5,attackers.length));
+      const target=attackers[idx]||nearest(attackers,F.width/2,mirrorY(10))||kicker;
+      if(target){target.targeted=true;target.actionState='receive';target.actionTime=.9;}
+      const nearPost=side==='left'?F.width*.43:F.width*.57;
+      const farPost=side==='left'?F.width*.60:F.width*.40;
+      const targetX=clamp(target?.x||((idx%2)?farPost:nearPost),4,F.width-4);
+      const targetY=clamp(target?.y||mirrorY(10.5),3,F.length-3);
+      s.ball.x=cornerX;s.ball.y=goalY;s.ball.z=.15;
+      releaseFrom(null,targetX,targetY,27.5,.58,side==='left'?4.2:-4.2);
+      waitUntil(()=>Math.hypot(s.ball.x-targetX,s.ball.y-targetY)<2.4||(s.ball.state==='dead'&&s.ball.z===0),2300,()=>{
+        settleToReceiver(s,target,done,{setPiece:true,kind:'corner',receiverId:String(target?.id||'')});
+      });
+    });
+  }
+'''
+          p.write_text(s[:start]+new_corner_fn+s[end:])
+          print('patched: corner choreography')
+
+          # Faster dead-ball setup without teleporting across the field.
+          p=Path('js/runtime/physicalSetPiecesV21.js'); s=p.read_text()
+          s=s.replace('const walkingMs=dist/5.4*1000;\n    const ms=Math.max(320,Math.min(2400,duration||walkingMs));',
+                      'const walkingMs=dist/7.8*1000;\n    const ms=Math.max(280,Math.min(1650,duration||walkingMs));',1)
+          p.write_text(s)
+          print('patched: dead-ball approach speed')
+          PY
+
+          node --check js/simulation/matchEngine.js
+          node --check js/runtime/coreStabilityV24.js
+          node --check js/runtime/physicalSetPiecesV21.js
+
+          git config user.name "Prime Football CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add js/simulation/matchEngine.js js/runtime/coreStabilityV24.js js/runtime/physicalSetPiecesV21.js
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "fix: unstick match flow and animate corners"
+            git push
+          fi
