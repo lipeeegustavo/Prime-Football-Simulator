@@ -1,0 +1,137 @@
+name: apply v24 engine cleanup
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-v24-engine-cleanup.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Patch engine and renderer
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def repl(path, old, new, label):
+              p=Path(path); s=p.read_text()
+              if old in s:
+                  p.write_text(s.replace(old,new))
+                  print('patched:', label)
+                  return True
+              print('already patched or pattern missing:', label)
+              return False
+
+          # Respect explicit zero/negative balance values instead of falling back via ||.
+          repl('js/simulation/matchEngine.js', "if(r()<(evCfg.foulChance||0.09)){", "if(r()<(evCfg.foulChance ?? 0.09)){", 'foul nullish')
+          repl('js/simulation/matchEngine.js', "if(r()<(evCfg.throwInChance||0.115)){", "if(r()<(evCfg.throwInChance ?? 0)){", 'throw-in nullish')
+          repl('js/simulation/matchEngine.js', "if(phase==='FINAL_THIRD'&&r()<(evCfg.cornerChanceFinalThird||0.055)){", "if(phase==='FINAL_THIRD'&&r()<(evCfg.cornerChanceFinalThird ?? 0)){", 'corner nullish')
+
+          # Make shot probability spatial: distance and visible goal angle matter.
+          old = '''  function decideOutcome(state,atk,shooter,r){
+              const def=atk==='A'?'B':'A',gk=keeper(state,def),a=attrs(shooter),ga=attrs(gk),coach=tactics(state,atk),defCoach=tactics(state,def);
+              const quality=(a.finishing||70)*.46+(a.positioning||70)*.22+(a.dribbling||70)*.08+coach.passRisk*.05;
+              const resistance=(ga.goalkeeping||gk?.overall||75)*.5+(ga.positioning||75)*.18+defCoach.pressing*.05;
+              const x=quality-resistance;
+              const goal=Math.max(.05,Math.min(.24,.11+x*.0055));
+              const save=Math.max(.25,Math.min(.61,.45-x*.003));
+              const n=r();
+              if(n<goal)return'GOAL';
+              if(n<goal+save)return'SAVE';
+              return'OUT';
+            }'''
+          new = '''  function decideOutcome(state,atk,shooter,r){
+              const def=atk==='A'?'B':'A',gk=keeper(state,def),a=attrs(shooter),ga=attrs(gk),coach=tactics(state,atk),defCoach=tactics(state,def);
+              const live=livePlayer(atk,shooter.id),F=Prime.FieldGeometry.FIELD,mouth=Prime.FieldGeometry.goalMouthX(),top=attacksTop(atk,state),goalY=top?0:F.length;
+              const sx=live?.x??F.width/2,sy=live?.y??F.length/2;
+              const distance=Math.hypot(sx-F.width/2,sy-goalY);
+              const va={x:mouth.left-sx,y:goalY-sy},vb={x:mouth.right-sx,y:goalY-sy};
+              const la=Math.hypot(va.x,va.y)||1,lb=Math.hypot(vb.x,vb.y)||1;
+              const angle=Math.acos(Math.max(-1,Math.min(1,(va.x*vb.x+va.y*vb.y)/(la*lb))));
+              const distanceFactor=Math.max(.05,Math.min(1,1-(distance-10)/52));
+              const angleFactor=Math.max(.12,Math.min(1,angle/.52));
+              const quality=(a.finishing||70)*.46+(a.positioning||70)*.22+(a.dribbling||70)*.08+coach.passRisk*.05;
+              const resistance=(ga.goalkeeping||gk?.overall||75)*.5+(ga.positioning||75)*.18+defCoach.pressing*.05;
+              const x=quality-resistance;
+              const goal=Math.max(.008,Math.min(.31,(.105+x*.0052)*distanceFactor*angleFactor));
+              const save=Math.max(.20,Math.min(.68,.46-x*.003+(1-distanceFactor)*.09));
+              const n=r();
+              if(n<goal)return'GOAL';
+              if(n<goal+save)return'SAVE';
+              return'OUT';
+            }'''
+          repl('js/simulation/matchEngine.js', old, new, 'spatial shot outcome')
+
+          # A clean shot that goes out was last touched by the attacker: goal kick, not a random corner.
+          old = '''          if(r()<.28){
+                    m.stats.corners[atk]++;logEvent(state,{type:'CORNER',team:atk,minute:nowMinute});
+                    m.poss=atk;const c=chooseCarrier(state,atk,r);m.carrierId=c?.id||null;m.possessionActions=Math.max(2,m.possessionActions);m.attackPhase='FINAL_THIRD';if(c)visualRestart(atk,c.id,'corner');
+                  }else{
+                    logEvent(state,{type:'GOAL_KICK',team:def,minute:nowMinute});
+                    m.poss=def;m.carrierId=keeper(state,def)?.id;m.possessionActions=0;m.attackPhase='BUILDUP';visualRestart(def,m.carrierId,'goal-kick');
+                  }'''
+          new = '''          logEvent(state,{type:'GOAL_KICK',team:def,minute:nowMinute});
+                  m.poss=def;m.carrierId=keeper(state,def)?.id;m.possessionActions=0;m.attackPhase='BUILDUP';visualRestart(def,m.carrierId,'goal-kick');'''
+          repl('js/simulation/matchEngine.js', old, new, 'remove random corner after shot out')
+
+          # Shootout: only players still on the pitch can take a kick.
+          old = "  function penaltyTaker(state,key,index){const ids=state.teams[key].penalties.filter(Boolean);return ids[index%Math.max(1,ids.length)]||state.teams[key].starters.find(Boolean);}"
+          new = "  function penaltyTaker(state,key,index){const m=state.match,t=state.teams[key],sent=new Set((m.sentOff?.[key]||[]).map(String)),current=new Set((t.starters||[]).filter(Boolean).map(String));const ids=(t.penalties||[]).filter(id=>id&&current.has(String(id))&&!sent.has(String(id)));const fallback=(t.starters||[]).filter(id=>id&&!sent.has(String(id)));const pool=ids.length?ids:fallback;return pool[index%Math.max(1,pool.length)]||null;}"
+          repl('js/simulation/matchEngine.js', old, new, 'eligible shootout takers')
+
+          # End the first five kicks early when the trailing side cannot catch up.
+          old = "    const idx=s.index,team=idx%2===0?'A':'B',round=Math.floor(idx/2),opp=team==='A'?'B':'A';\n    if(idx>=10){"
+          new = "    const idx=s.index,team=idx%2===0?'A':'B',round=Math.floor(idx/2),opp=team==='A'?'B':'A';\n    const aTaken=s.kicks.filter(k=>k.team==='A').length,bTaken=s.kicks.filter(k=>k.team==='B').length;\n    if((aTaken<5||bTaken<5)&&(s.A>s.B+Math.max(0,5-bTaken)||s.B>s.A+Math.max(0,5-aTaken))){s.finished=true;finishAfterShootout(state);return;}\n    if(idx>=10){"
+          repl('js/simulation/matchEngine.js', old, new, 'early shootout finish')
+
+          # More realistic penalty conversion baseline; misses outside the frame become less frequent.
+          repl('js/simulation/matchEngine.js', "return Math.max(.60,Math.min(.91,.73+((pa.finishing||75)-(ka.goalkeeping||78))*.004));", "return Math.max(.68,Math.min(.94,.80+((pa.finishing||75)-(ka.goalkeeping||78))*.0035));", 'penalty conversion')
+
+          # Renderer accepts the event schema emitted by the engine directly.
+          old = "    const from=findPlayerById(evt.team,evt.playerId)||scene.carrier,to=findPlayerById(evt.team,evt.targetId);if(!from||!to){done&&done({missing:true});return;}"
+          new = "    const fromId=evt.playerId||evt.fromId,targetId=evt.targetId||evt.toId;const from=findPlayerById(evt.team,fromId)||scene.carrier,to=findPlayerById(evt.team,targetId);if(!from||!to){done&&done({missing:true});return;}"
+          repl('js/render/pitchRenderer.js', old, new, 'pass event ids')
+
+          # Remove the old forced-goal fallback. If physics did not cross the goal line, it is not a goal.
+          old = '''        if(a.elapsed>1.7){
+                    if(a.outcome==='GOAL'){
+                      const attacksTop=visualAttacksTop(a.teamKey),goalY=attacksTop?-.45:F.length+.45;
+                      Prime.Ball.kickToward(scene.ball,F.width/2,goalY,12,'shot-goal',{loft:0,spin:0});
+                      a.phase='force';a.elapsed=0;return;
+                    }
+                    scene.ball.vx=scene.ball.vy=0;scene.ball.state='dead';const cb=a.done,outcome=a.outcome;scene.action=null;cb&&cb({goalCrossed:false,outcome});return;
+                  }
+                }else if(a.phase==='force'){
+                  let crossed=false;if(G.crossesGoalLine(prev,scene.ball,'top')){scene.netPulseTop=1;crossed=true;}if(G.crossesGoalLine(prev,scene.ball,'bottom')){scene.netPulseBottom=1;crossed=true;}
+                  if(crossed||a.elapsed>.9){scene.ball.vx=scene.ball.vy=scene.ball.vz=0;scene.ball.state='dead';const cb=a.done;scene.action=null;cb&&cb({goalCrossed:true,forcedGoal:true});return;}
+                }'''
+          new = '''        if(a.elapsed>3.2){
+                    scene.ball.vx=scene.ball.vy=scene.ball.vz=0;scene.ball.state='dead';const cb=a.done,outcome=a.outcome;scene.action=null;cb&&cb({goalCrossed:false,outcome,timeout:true});return;
+                  }
+                }'''
+          repl('js/render/pitchRenderer.js', old, new, 'remove forced goal')
+          PY
+
+          node --check js/simulation/matchEngine.js
+          node --check js/render/pitchRenderer.js
+      - name: Commit cleanup
+        run: |
+          if git diff --quiet; then
+            echo 'No changes needed.'
+            exit 0
+          fi
+          git config user.name 'Prime Football CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add js/simulation/matchEngine.js js/render/pitchRenderer.js
+          git commit -m 'fix: consolidate v24 engine physics rules'
+          git push
