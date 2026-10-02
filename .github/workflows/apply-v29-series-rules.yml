@@ -1,0 +1,57 @@
+name: apply v29 online series rules
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-v29-series-rules.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Patch two-leg regulation rules
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('js/simulation/matchEngine.js')
+          s=p.read_text()
+          old="""  function finishRegulation(state){
+    const m=state.match;if(!m||m.finished)return;
+    flushVisuals(state);m.gameSeconds=TOTAL+(m.secondHalfStoppage||1)*60;m.minute=90+(m.secondHalfStoppage||1);Prime.GameLoop.setPaused(true);
+    if(m.score.A===m.score.B){emit(state,'Fim do tempo regulamentar. Vamos aos pênaltis.','event','PENALTY_SHOOTOUT');startShootout(state);update(state);return;}
+    m.finished=true;emit(state,'Fim de jogo.','event','FULL_TIME');update(state);hooks.onFinish&&hooks.onFinish(state);
+  }
+"""
+          new="""  function finishRegulation(state){
+    const m=state.match;if(!m||m.finished)return;
+    flushVisuals(state);m.gameSeconds=TOTAL+(m.secondHalfStoppage||1)*60;m.minute=90+(m.secondHalfStoppage||1);Prime.GameLoop.setPaused(true);
+    const friendDecision=state.mode==='friend'&&Prime.FriendMatchV29?.regulationDecision?Prime.FriendMatchV29.regulationDecision(state):null;
+    if(friendDecision?.forceShootout){emit(state,'Fim do tempo regulamentar. O agregado está empatado: vamos aos pênaltis.','event','PENALTY_SHOOTOUT');startShootout(state);update(state);return;}
+    if(friendDecision?.finishNoShootout){m.finished=true;emit(state,'Fim de jogo.','event','FULL_TIME');update(state);hooks.onFinish&&hooks.onFinish(state);return;}
+    if(m.score.A===m.score.B){emit(state,'Fim do tempo regulamentar. Vamos aos pênaltis.','event','PENALTY_SHOOTOUT');startShootout(state);update(state);return;}
+    m.finished=true;emit(state,'Fim de jogo.','event','FULL_TIME');update(state);hooks.onFinish&&hooks.onFinish(state);
+  }
+"""
+          if old not in s:
+              raise SystemExit('finishRegulation block not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Validate JavaScript syntax
+        run: node --check js/simulation/matchEngine.js && node --check js/online/friendMatchV29.js && node --check js/ui/shareResultV29.js
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add js/simulation/matchEngine.js
+          git commit -m 'feat: support aggregate rules for online two-leg series'
+          git push origin main
