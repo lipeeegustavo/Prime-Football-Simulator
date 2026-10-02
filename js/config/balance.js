@@ -1,12 +1,11 @@
 (function (Prime) {
   Prime.Balance = Object.freeze({
     visualQueueMax: 5,
-    receiveTimeout: 2.5,
+    receiveTimeout: 3.0,
     visualFlushAtFullTime: 3,
     shortPassBacklogThreshold: 3,
     playerRadius: 1.05,
 
-    // Camera / leitura visual
     camera: Object.freeze({
       followZoom: 2.45,
       fullZoom: 1,
@@ -14,23 +13,22 @@
       lookAhead: 5.5
     }),
 
-    // Ritmo: faltas e finalizações continuam probabilísticas; saídas de campo agora
-    // dependem da bola realmente cruzar uma linha física do campo.
     event: Object.freeze({
       baseGapMin: 18,
       baseGapMax: 34,
       transitionWindow: 7.5,
       maxPossessionActions: 8,
       minPossessionActions: 2,
-      foulChance: 0.075,
-      throwInChance: 0,
-      cornerChanceFinalThird: 0,
-      goalKickChance: 0,
-      shotBoost: 5.0,
+      foulChance: 0.06,
+      // Valores negativos desativam completamente os eventos artificiais no motor antigo.
+      // Lateral/escanteio/tiro de meta passam a nascer somente da física das linhas do campo.
+      throwInChance: -1,
+      cornerChanceFinalThird: -1,
+      goalKickChance: -1,
+      shotBoost: 4.1,
       maxShootoutKicks: 30
     }),
 
-    // Movimento coletivo em metros do campo.
     movement: Object.freeze({
       blockShiftAttack: 18,
       blockShiftDefend: 13,
@@ -55,10 +53,9 @@
       dribbleTouchDistance: 0.75
     }),
 
-    // Física visual da bola. O motor decide o resultado; estes valores só definem a trajetória.
     ball: Object.freeze({
-      shortPassSpeed: 18.5,
-      longPassSpeed: 24.0,
+      shortPassSpeed: 19.5,
+      longPassSpeed: 27.5,
       crossSpeed: 25.5,
       crossLoft: 0.70,
       shotSpeed: 38.0,
@@ -66,7 +63,9 @@
       saveShotLoft: 0.12,
       throughBallLead: 0.34,
       passLeadMaxMeters: 4.5,
-      curveSpin: 8.5
+      curveSpin: 7.4,
+      maxPhysicsStep: 0.02,
+      shotMaxVisualSeconds: 3.2
     })
   });
 })(window.Prime = window.Prime || {});
