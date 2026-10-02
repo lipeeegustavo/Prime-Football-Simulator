@@ -248,14 +248,28 @@
     if(s.preview||s.camera?.mode==='full')return;const ctx=s.ctx,w=Math.min(190,s.canvas.width*.22),h=w*(F.width/F.length),x=(s.canvas.width-w)/2,y=s.canvas.height-h-12;ctx.save();ctx.fillStyle='rgba(5,20,10,.82)';roundRect(ctx,x,y,w,h,10);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.36)';ctx.stroke();const pad=8,fx=x+pad,fy=y+pad,fw=w-pad*2,fh=h-pad*2;ctx.strokeStyle='rgba(255,255,255,.7)';ctx.strokeRect(fx,fy,fw,fh);ctx.beginPath();ctx.moveTo(fx+fw/2,fy);ctx.lineTo(fx+fw/2,fy+fh);ctx.stroke();for(const pl of s.players){const px=fx+pl.y/F.length*fw,py=fy+pl.x/F.width*fh;ctx.fillStyle=pl.key==='A'?'#3B82F6':'#FF6B35';ctx.beginPath();ctx.arc(px,py,2.8,0,Math.PI*2);ctx.fill();}ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(fx+s.ball.y/F.length*fw,fy+s.ball.x/F.width*fh,2.5,0,Math.PI*2);ctx.fill();ctx.restore();
   }
   function drawPenaltyCinematic(s){
-    const a=s.action;if(!a||a.type!=='penalty')return;
+    const a=s.action?.type==='penalty'?s.action:s.penaltySetup;if(!a)return;
     const ctx=s.ctx,W=Math.min(s.canvas.width*.88,980),H=Math.min(s.canvas.height*.72,570),x=(s.canvas.width-W)/2,y=(s.canvas.height-H)/2;
     ctx.save();ctx.fillStyle='rgba(2,10,6,.88)';roundRect(ctx,x,y,W,H,18);ctx.fill();ctx.strokeStyle='rgba(182,242,58,.32)';ctx.lineWidth=2;ctx.stroke();
     const gx=x+W*.12,gy=y+H*.12,gw=W*.76,gh=H*.55,depth=Math.max(18,H*.06),bgx=gx+gw*.045,bgy=gy-depth,bgw=gw*.91,bgh=gh*.93;
     ctx.strokeStyle='#fff';ctx.lineWidth=Math.max(4,W*.004);ctx.strokeRect(gx,gy,gw,gh);ctx.strokeStyle='rgba(255,255,255,.42)';ctx.lineWidth=1.4;ctx.strokeRect(bgx,bgy,bgw,bgh);
     for(let i=1;i<8;i++){const xx=gx+gw*i/8;ctx.beginPath();ctx.moveTo(xx,gy);ctx.lineTo(bgx+bgw*i/8,bgy+bgh);ctx.stroke();}
     for(let i=1;i<5;i++){const yy=gy+gh*i/5;ctx.beginPath();ctx.moveTo(gx,yy);ctx.lineTo(gx+gw,yy);ctx.stroke();}
-    const role=a.interactiveRole||'auto',flight=a.phase==='flight'||a.phase==='hold'?Math.max(0,Math.min(1,(a.flightElapsed||0)/(a.flightDuration||.78))):0;
+    const role=a.interactiveRole||'auto',flight=a.phase==='flight'||a.phase==='hold'?Math.max(0,Math.min(1,(a.flightElapsed||0)/(a.flightDuration||.92))):0;
+    const liveShooter=findPlayerById(a.teamKey,a.shooterId),liveKeeper=scene.players.find(p=>p.key!==a.teamKey&&p.isKeeper);
+    const runQ=a.phase==='waiting'?0:a.phase==='runup'?Math.max(0,Math.min(1,(a.elapsed||0)/(a.impactAt||.92))):1;
+    const strikerX=x+W*.5,strikerY=y+H*(.80-.085*runQ),sr=Math.max(15,W*.018);
+    ctx.fillStyle=a.teamKey==='A'?'#3B82F6':'#FF6B35';ctx.strokeStyle='#fff';ctx.lineWidth=Math.max(2,W*.0025);ctx.beginPath();ctx.arc(strikerX,strikerY,sr,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#fff';ctx.font=`900 ${Math.max(12,W*.014)}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(liveShooter?.number||'9'),strikerX,strikerY);
+    ctx.font=`700 ${Math.max(11,W*.012)}px system-ui`;ctx.fillText(a.shooterLabel||liveShooter?.label||'Cobrador',strikerX,strikerY+sr+16);
+    const keeperTeam=a.teamKey==='A'?'B':'A',keeperBaseX=gx+gw*.5,keeperBaseY=gy+gh*.70;
+    let keeperX=keeperBaseX,keeperY=keeperBaseY;
+    if(a.phase==='flight'||a.phase==='hold'){
+      const dcol=(Number(a.diveZone)||4)%3,drow=Math.floor((Number(a.diveZone)||4)/3),dq=Math.max(0,Math.min(1,(a.flightElapsed||0)/.60));
+      keeperX=gx+gw*(.5+([.18,.5,.82][dcol]-.5)*dq);keeperY=gy+gh*(.70+([.20,.50,.78][drow]-.70)*dq);
+    }
+    ctx.fillStyle=keeperTeam==='A'?'#3B82F6':'#FF6B35';ctx.strokeStyle='#DDFB77';ctx.lineWidth=Math.max(2,W*.0025);ctx.beginPath();ctx.arc(keeperX,keeperY,sr*.92,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#fff';ctx.font=`900 ${Math.max(12,W*.014)}px system-ui`;ctx.fillText(String(liveKeeper?.number||'1'),keeperX,keeperY);
     const ease=1-Math.pow(1-flight,2.2),col=a.shotZone%3,row=Math.floor(a.shotZone/3),shotX=[.18,.5,.82][col];
     const targetX=a.resultKind==='WIDE'?(col===0?-.07:1.07):shotX,targetY=a.resultKind==='OVER'?-.16:[.18,.48,.79][row];
     if(role!=='keeper'){
@@ -276,7 +290,7 @@
   function draw(s){
     if(!s||!s.ctx)return;
     drawField(s);
-    if(s.action?.type==='penalty'){drawPenaltyCinematic(s);return;}
+    if(s.action?.type==='penalty'||s.penaltySetup){drawPenaltyCinematic(s);return;}
     drawArrow(s);for(const p of s.players)drawPlayerCircle(s,p);drawReferee(s);drawBall(s);drawMiniMap(s);
   }
 
@@ -392,8 +406,24 @@
     }
   }
 
+  function preparePenalty(teamKey,shooterId,goalkeeperId,meta){
+    if(!scene)return false;
+    const top=visualAttacksTop(teamKey),spotY=top?F.penaltySpot:F.length-F.penaltySpot;
+    const shooter=findPlayerById(teamKey,shooterId)||scene.players.find(p=>p.key===teamKey&&!p.isKeeper);
+    const gk=findPlayerById(teamKey==='A'?'B':'A',goalkeeperId)||scene.players.find(p=>p.key!==teamKey&&p.isKeeper);
+    const startX=F.width/2,startY=spotY+(top?6.2:-6.2),strikeX=F.width/2,strikeY=spotY+(top?.65:-.65);
+    if(shooter){shooter.x=startX;shooter.y=startY;shooter.tx=startX;shooter.ty=startY;}
+    if(gk){gk.x=F.width/2;gk.y=top?.45:F.length-.45;gk.tx=gk.x;gk.ty=gk.y;}
+    scene.carrier=null;scene.target=null;
+    scene.ball.x=F.width/2;scene.ball.y=spotY;scene.ball.z=0;scene.ball.vx=scene.ball.vy=scene.ball.vz=0;scene.ball.state='dead';
+    scene.penaltySetup={type:'penalty',phase:'waiting',elapsed:0,impactAt:.92,flightElapsed:0,flightDuration:.92,scored:false,resultKind:null,interactiveRole:meta?.interactiveRole||'auto',teamKey,shooterId:String(shooterId),shooterLabel:shooter?.label||shooter?.name||'Cobrador',shotZone:4,diveZone:4,top,startX,startY,strikeX,strikeY};
+    draw(scene);
+    return true;
+  }
+
   function playPenalty(teamKey,shooterId,shotZone,diveZone,scored,done,meta){
     if(!scene){done&&done();return;}
+    if(!scene.penaltySetup)preparePenalty(teamKey,shooterId,null,meta);
     const top=visualAttacksTop(teamKey),spotY=top?F.penaltySpot:F.length-F.penaltySpot;
     const shooter=findPlayerById(teamKey,shooterId)||scene.players.find(p=>p.key===teamKey&&!p.isKeeper);
     const gk=scene.players.find(p=>p.key!==teamKey&&p.isKeeper),resultKind=meta?.resultKind||(scored?'GOAL':'SAVE');
@@ -401,7 +431,8 @@
     if(shooter){shooter.x=startX;shooter.y=startY;shooter.tx=strikeX;shooter.ty=strikeY;setAnim(shooter,'run',.65);}
     if(gk){gk.x=F.width/2;gk.y=top?.45:F.length-.45;gk.tx=gk.x;gk.ty=gk.y;}
     scene.carrier=null;scene.target=null;scene.ball.x=F.width/2;scene.ball.y=spotY;scene.ball.z=0;scene.ball.vx=scene.ball.vy=scene.ball.vz=0;scene.ball.state='dead';
-    scene.action={type:'penalty',phase:'runup',elapsed:0,impactAt:.72,flightElapsed:0,flightDuration:.78,done,scored,resultKind,interactiveRole:meta?.interactiveRole||'auto',teamKey,shooterId:String(shooterId),shooterLabel:shooter?.label||shooter?.name||'Cobrador',shotZone,diveZone,top,startX,startY,strikeX,strikeY};
+    scene.penaltySetup=null;
+    scene.action={type:'penalty',phase:'runup',elapsed:0,impactAt:.92,flightElapsed:0,flightDuration:.92,done,scored,resultKind,interactiveRole:meta?.interactiveRole||'auto',teamKey,shooterId:String(shooterId),shooterLabel:shooter?.label||shooter?.name||'Cobrador',shotZone,diveZone,top,startX,startY,strikeX,strikeY};
   }
 
   function frame(dt,realDt){
@@ -436,6 +467,6 @@
 
   Prime.Pitch=Object.freeze({
     coordinatesForFormation,mount,refresh,renderPreview,frame,draw,setCarrier,setTarget,kickToPlayer,shoot,playEvent,
-    getBall,getScene,isMounted,isActionActive,cancelAction,setCameraMode,getCameraMode,celebrate,showRefereeCard,playPenalty,restartToCarrier
+    getBall,getScene,isMounted,isActionActive,cancelAction,setCameraMode,getCameraMode,celebrate,showRefereeCard,preparePenalty,playPenalty,restartToCarrier
   });
 })(window.Prime=window.Prime||{});

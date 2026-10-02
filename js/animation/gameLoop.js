@@ -16,7 +16,6 @@
     if(paused&&Prime.Pitch&&Prime.Pitch.getScene){
       const scene=Prime.Pitch.getScene();
       if(scene&&scene.action&&scene.action.type==='penalty'){
-        Prime.Pitch.frame(0,dt);
         scene.__penaltyWatch=(scene.__penaltyWatch||0)+dt;
         if(scene.__penaltyWatch>4.25&&scene.action&&scene.action.type==='penalty'){
           const action=scene.action;

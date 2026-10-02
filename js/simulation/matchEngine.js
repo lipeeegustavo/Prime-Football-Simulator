@@ -512,6 +512,7 @@
     const humanShooter=state.mode==='cpu'?team==='A':false;
     const humanKeeper=state.mode==='cpu'?team==='B':false;
     m.pendingPenalty={team,opp,round,shooterId,goalkeeperId,humanShooter,humanKeeper};
+    Prime.Pitch?.preparePenalty?.(team,shooterId,goalkeeperId,{interactiveRole:humanShooter?'shooter':humanKeeper?'keeper':'auto'});
     hooks.onPenaltyRequest&&hooks.onPenaltyRequest({...m.pendingPenalty,score:{A:s.A,B:s.B}},state);
     if(state.mode!=='cpu'){
       const zone=Math.floor(m.rng()*9);submitPenaltyChoice(state,zone);
@@ -535,7 +536,7 @@
     return {ok:true,scored};
   }
   function finishAfterShootout(state){
-    const m=state.match;if(!m)return;emit(state,`Pênaltis: ${state.teams.A.name} ${m.shootout.A} x ${m.shootout.B} ${state.teams.B.name}.`,'goal','SHOOTOUT',m.shootout);m.finished=true;m.gameSeconds=TOTAL+(m.secondHalfStoppage||1)*60;m.minute=90+(m.secondHalfStoppage||1);Prime.GameLoop.setPaused(true);emit(state,'Fim de jogo.','event','FULL_TIME');update(state);hooks.onFinish&&hooks.onFinish(state);
+    const m=state.match;if(!m)return;const ps=Prime.Pitch?.getScene?.();if(ps)ps.penaltySetup=null;emit(state,`Pênaltis: ${state.teams.A.name} ${m.shootout.A} x ${m.shootout.B} ${state.teams.B.name}.`,'goal','SHOOTOUT',m.shootout);m.finished=true;m.gameSeconds=TOTAL+(m.secondHalfStoppage||1)*60;m.minute=90+(m.secondHalfStoppage||1);Prime.GameLoop.setPaused(true);emit(state,'Fim de jogo.','event','FULL_TIME');update(state);hooks.onFinish&&hooks.onFinish(state);
   }
   function finishRegulation(state){
     const m=state.match;if(!m||m.finished)return;
