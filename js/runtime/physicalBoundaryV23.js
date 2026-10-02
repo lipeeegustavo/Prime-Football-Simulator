@@ -53,7 +53,7 @@
     });
   }
   function goalOwnerForSide(state,top){
-    const aAttacksTop=('A'==='A')!==Boolean(state.match?.secondHalf);
+    const aAttacksTop=!Boolean(state.match?.secondHalf);
     if(top)return aAttacksTop?'B':'A';
     return aAttacksTop?'A':'B';
   }
@@ -62,7 +62,7 @@
     const top=b.y<0,defTeam=goalOwnerForSide(state,top),atkTeam=other(defTeam);
     const g=Prime.FieldGeometry.goalMouthX();
     const insideMouth=b.x>=g.left&&b.x<=g.right&&Number(b.z||0)<2.44;
-    if(insideMouth)return; // gols continuam sob autoridade do motor de finalização
+    if(insideMouth)return;
     boundaryBusy=true;
     if(s.action&&base.cancelAction)base.cancelAction();
     const x=Math.max(1,Math.min(F.width-1,b.x));
@@ -83,7 +83,8 @@
     }
   }
   function detect(){
-    const s=scene(),state=s?.state,m=state?.match;if(!s?.ball||!m||m.finished||m.waitingHalfTime||boundaryBusy||performance.now()<cooldownUntil)return;
+    const s=scene(),state=s?.state,m=state?.match;
+    if(!s?.ball||!m||m.finished||m.waitingHalfTime||boundaryBusy||s.v24ShotActive||performance.now()<cooldownUntil)return;
     const a=s.action?.type;
     if(['shot','penalty','restart'].includes(a))return;
     const b=s.ball;
